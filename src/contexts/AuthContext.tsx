@@ -3,11 +3,14 @@ import type { RecordModel } from 'pocketbase'
 import pb from '@/lib/pocketbase/client'
 import { ClientResponseError } from 'pocketbase'
 
+export type Papel = 'admin' | 'lider' | 'consultor' | 'revisor'
+
 export interface UserRecord extends RecordModel {
   email: string
   name?: string
   avatar?: string
   verified?: boolean
+  role?: Papel
 }
 
 export interface AuthContextType {
@@ -15,12 +18,22 @@ export interface AuthContextType {
   token: string | null
   isAuthenticated: boolean
   isLoading: boolean
+  role: Papel | null
+  isAdmin: boolean
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
   logout: () => void
   requestPasswordReset: (email: string) => Promise<void>
   confirmPasswordReset: (token: string, password: string, passwordConfirm: string) => Promise<void>
   confirmEmailVerification: (token: string) => Promise<void>
   requestVerification: (email: string) => Promise<void>
+  criarConvite: (
+    email: string,
+    role: Papel,
+  ) => Promise<{ id: string; email: string; role: Papel; expires_at: string }>
+  listarConvites: () => Promise<{
+    items: { id: string; email: string; role: Papel; expires_at: string; created: string }[]
+  }>
+  aceitarConvite: (token: string, password: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -35,10 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    // Check persistence preference
     const rememberPref = localStorage.getItem(REMEMBER_KEY)
     if (rememberPref === 'false' && !sessionStorage.getItem('benera_session_active')) {
-      // User requested session-only on last login, but browser session ended
       pb.authStore.clear()
       setUser(null)
       setToken(null)
@@ -53,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setIsLoading(false)
 
-    // Subscribe to auth changes
     const unsubscribe = pb.authStore.onChange((newToken, model) => {
       setToken(newToken || null)
       setUser((model as UserRecord | null) ?? null)
@@ -65,10 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string, rememberMe: boolean = true) => {
-    // Authenticate with PocketBase
     const authData = await pb.collection('users').authWithPassword(email.trim(), password)
 
-    // Store remember preference
     if (rememberMe) {
       localStorage.setItem(REMEMBER_KEY, 'true')
       sessionStorage.removeItem('benera_session_active')
@@ -80,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((authData.record as UserRecord | null) ?? null)
     setToken(authData.token)
   }
+
   const logout = () => {
     pb.authStore.clear()
     localStorage.removeItem(REMEMBER_KEY)
@@ -94,7 +103,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const confirmPasswordReset = async (token: string, password: string, passwordConfirm: string) => {
     await pb.collection('users').confirmPasswordReset(token, password, passwordConfirm)
-    // Redefinição não realiza login automático de acordo com a especificação
     pb.authStore.clear()
     setUser(null)
     setToken(null)
@@ -108,6 +116,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await pb.collection('users').requestVerification(email.trim())
   }
 
+  const criarConvite = async (email: string, role: Papel) => {
+    return await pb.send('/backend/v1/invites', {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    })
+  }
+
+  const listarConvites = async () => {
+    return await pb.send('/backend/v1/invites', { method: 'GET' })
+  }
+
+  const aceitarConvite = async (token: string, password: string) => {
+    await pb.send('/backend/v1/invites/aceitar', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    })
+  }
+
+  const role = (user?.role as Papel | undefined) ?? null
+
   return (
     <AuthContext.Provider
       value={{
@@ -115,12 +143,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         isAuthenticated: !!user && pb.authStore.isValid,
         isLoading,
+        role,
+        isAdmin: role === 'admin',
         login,
         logout,
         requestPasswordReset,
         confirmPasswordReset,
         confirmEmailVerification,
         requestVerification,
+        criarConvite,
+        listarConvites,
+        aceitarConvite,
       }}
     >
       {children}
@@ -157,11 +190,11 @@ export function translateAuthError(error: unknown): string {
       if (message.toLowerCase().includes('token') || message.toLowerCase().includes('expired')) {
         return 'Link de redefinição ou verificação expirado ou inválido.'
       }
-      return 'Dados inválidos. Verifique os campos informados.'
+      return error.response?.message || 'Dados inválidos. Verifique os campos informados.'
     }
 
     if (status === 403) {
-      return 'Acesso não autorizado ou email pendente de verificação.'
+      return error.response?.message || 'Acesso não autorizado ou email pendente de verificação.'
     }
 
     if (status === 404) {

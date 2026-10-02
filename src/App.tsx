@@ -10,6 +10,8 @@ import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
 import Dashboard from './pages/Dashboard'
+import PainelConvites from './pages/PainelConvites'
+import AceitarConvite from './pages/AceitarConvite'
 import NotFound from './pages/NotFound'
 
 // ONLY IMPORT AND RENDER WORKING PAGES, NEVER ADD PLACEHOLDER COMPONENTS OR PAGES IN THIS FILE
@@ -28,6 +30,8 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/convites" element={<PainelConvites />} />
+            <Route path="/ativar-acesso" element={<AceitarConvite />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   LogOut,
   User,
+  UserPlus,
   ShieldCheck,
   CheckCircle2,
   Building2,
@@ -24,7 +25,7 @@ import {
 } from '@/components/ui/dialog'
 
 export default function Dashboard() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth()
+  const { user, isAuthenticated, isLoading, logout, isAdmin } = useAuth()
   const navigate = useNavigate()
   const [profileModalOpen, setProfileModalOpen] = useState(false)
 
@@ -74,6 +75,20 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="text-xs font-semibold border-slate-200 text-slate-700 hover:text-[#0B3556] hover:bg-slate-50 gap-1.5"
+              >
+                <Link to="/convites">
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Convidar usuário</span>
+                </Link>
+              </Button>
+            )}
+
             <Button
               variant="outline"
               size="sm"
@@ -226,7 +241,15 @@ export default function Dashboard() {
               <div className="flex justify-between">
                 <span className="text-slate-500">Perfil:</span>
                 <span className="font-semibold text-[#0B3556]">
-                  Administrador / Consultor Sênior
+                  {(() => {
+                    const roleLabels: Record<string, string> = {
+                      admin: 'Administrador',
+                      lider: 'Líder',
+                      consultor: 'Consultor',
+                      revisor: 'Revisor',
+                    }
+                    return roleLabels[user.role ?? ''] ?? 'Sem papel definido'
+                  })()}
                 </span>
               </div>
               <div className="flex justify-between">

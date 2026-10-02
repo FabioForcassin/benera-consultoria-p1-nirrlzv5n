@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   TrendingUp,
 } from 'lucide-react'
+// T1.1: dica de credencial demo removida; cadastro somente por convite
 import { useAuth, translateAuthError } from '@/contexts/AuthContext'
 import { BeneraLogo } from '@/components/BeneraLogo'
 import { Button } from '@/components/ui/button'
@@ -382,15 +383,8 @@ export default function Index() {
               </div>
               <div className="leading-snug">
                 <span className="font-semibold text-slate-800">Acesso Restrito:</span> O cadastro é
-                gerenciado pelo RH e administração da Benera. Para acesso demo, use{' '}
-                <code className="text-[#0B3556] font-mono bg-white px-1 py-0.5 rounded border border-slate-200">
-                  fabio.forcassin@benera.com.br
-                </code>{' '}
-                /{' '}
-                <code className="text-[#0B3556] font-mono bg-white px-1 py-0.5 rounded border border-slate-200">
-                  Skip@Pass
-                </code>
-                .
+                gerenciado pelo RH e administração da Benera. Solicite um convite a um administrador
+                do sistema.
               </div>
             </div>
           </div>
