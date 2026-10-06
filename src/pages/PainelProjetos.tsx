@@ -91,7 +91,9 @@ export default function PainelProjetos() {
       setClientes((c as { items: Cliente[] }).items)
       setServicos((s as { items: Servico[] }).items)
       setUsuarios((u as { items: Usuario[] }).items)
-    } catch (_) {}
+    } catch {
+      // Catálogos ficam vazios; os selects mostram placeholder e o usuário recarrega a página.
+    }
   }
 
   if (!podeCadastrar) {
