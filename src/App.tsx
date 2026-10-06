@@ -11,6 +11,7 @@ import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
 import Dashboard from './pages/Dashboard'
 import PainelConvites from './pages/PainelConvites'
+import PainelProjetos from './pages/PainelProjetos'
 import AceitarConvite from './pages/AceitarConvite'
 import NotFound from './pages/NotFound'
 
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/convites" element={<PainelConvites />} />
+            <Route path="/projetos" element={<PainelProjetos />} />
             <Route path="/ativar-acesso" element={<AceitarConvite />} />
           </Route>
           <Route path="*" element={<NotFound />} />

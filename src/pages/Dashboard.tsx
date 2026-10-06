@@ -4,6 +4,7 @@ import {
   LogOut,
   User,
   UserPlus,
+  FolderPlus,
   ShieldCheck,
   CheckCircle2,
   Building2,
@@ -25,7 +26,8 @@ import {
 } from '@/components/ui/dialog'
 
 export default function Dashboard() {
-  const { user, isAuthenticated, isLoading, logout, isAdmin } = useAuth()
+  const { user, isAuthenticated, isLoading, logout, isAdmin, role } = useAuth()
+  const isLider = role === 'lider'
   const navigate = useNavigate()
   const [profileModalOpen, setProfileModalOpen] = useState(false)
 
@@ -85,6 +87,20 @@ export default function Dashboard() {
                 <Link to="/convites">
                   <UserPlus className="w-3.5 h-3.5" />
                   <span>Convidar usuário</span>
+                </Link>
+              </Button>
+            )}
+
+            {(isAdmin || isLider) && (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="text-xs font-semibold border-slate-200 text-slate-700 hover:text-[#0B3556] hover:bg-slate-50 gap-1.5"
+              >
+                <Link to="/projetos">
+                  <FolderPlus className="w-3.5 h-3.5" />
+                  <span>Projetos</span>
                 </Link>
               </Button>
             )}

@@ -20,6 +20,7 @@ export interface AuthContextType {
   isLoading: boolean
   role: Papel | null
   isAdmin: boolean
+  isLider: boolean
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
   logout: () => void
   requestPasswordReset: (email: string) => Promise<void>
@@ -135,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const role = (user?.role as Papel | undefined) ?? null
+  const isLider = role === 'lider'
 
   return (
     <AuthContext.Provider
@@ -145,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         role,
         isAdmin: role === 'admin',
+        isLider,
         login,
         logout,
         requestPasswordReset,
