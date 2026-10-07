@@ -94,8 +94,10 @@ const PAPEIS_PROJETO: Record<string, string> = {
 }
 
 export default function PainelProjetos() {
-  const { isAdmin, isLider } = useAuth()
+  const { isAdmin, isLider, user } = useAuth()
   const podeCadastrar = isAdmin || isLider
+  // Consultor e revisor entram na página: veem só a Carteira (escopo por vínculo, aplicado no servidor).
+  const podeVerCarteira = !!user
 
   // Estado: aba ativa
   const [aba, setAba] = useState<'projeto' | 'cliente' | 'membros' | 'carteira'>('carteira')
@@ -262,14 +264,14 @@ export default function PainelProjetos() {
     }
   }
 
-  if (!podeCadastrar) {
+  if (!podeVerCarteira) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
         <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 p-8 text-center">
           <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-4" />
           <h1 className="text-xl font-bold text-[#0B3556]">Acesso restrito</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Somente administradores e líderes podem cadastrar clientes e projetos.
+            Faça login para ver sua carteira de projetos.
           </p>
           <Button asChild className="mt-6 w-full h-11 bg-[#0B3556] hover:bg-[#1B5E8A] text-white">
             <Link to="/dashboard">Voltar ao painel</Link>
@@ -428,9 +430,9 @@ export default function PainelProjetos() {
       <div className="w-full max-w-[860px] my-auto py-8">
         <div className="flex gap-2 mb-6 flex-wrap">
           {tabBtn('carteira', 'Carteira', <ListFilter className="w-4 h-4" />)}
-          {tabBtn('projeto', 'Novo projeto', <FolderPlus className="w-4 h-4" />)}
-          {tabBtn('cliente', 'Novo cliente', <Building2 className="w-4 h-4" />)}
-          {tabBtn('membros', 'Alocar membro', <UserPlus className="w-4 h-4" />)}
+          {podeCadastrar && tabBtn('projeto', 'Novo projeto', <FolderPlus className="w-4 h-4" />)}
+          {podeCadastrar && tabBtn('cliente', 'Novo cliente', <Building2 className="w-4 h-4" />)}
+          {podeCadastrar && tabBtn('membros', 'Alocar membro', <UserPlus className="w-4 h-4" />)}
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200/80 p-8 shadow-[0_20px_40px_rgba(0,0,0,0.06)] animate-benera-form">

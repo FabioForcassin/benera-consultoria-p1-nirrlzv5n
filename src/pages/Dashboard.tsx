@@ -5,6 +5,7 @@ import {
   User,
   UserPlus,
   FolderPlus,
+  ListFilter,
   ShieldCheck,
   CheckCircle2,
   Building2,
@@ -101,6 +102,20 @@ export default function Dashboard() {
                 <Link to="/projetos">
                   <FolderPlus className="w-3.5 h-3.5" />
                   <span>Projetos</span>
+                </Link>
+              </Button>
+            )}
+
+            {!isAdmin && !isLider && (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="text-xs font-semibold border-slate-200 text-slate-700 hover:text-[#0B3556] hover:bg-slate-50 gap-1.5"
+              >
+                <Link to="/projetos">
+                  <ListFilter className="w-3.5 h-3.5" />
+                  <span>Meus projetos</span>
                 </Link>
               </Button>
             )}
