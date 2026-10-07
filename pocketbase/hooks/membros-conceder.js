@@ -33,6 +33,13 @@ routerAdd(
       throw new BadRequestError('Papel de projeto inválido.')
     }
 
+    // T1.3: a coleção projects existe — vínculo só é concedido a projeto real (bloqueia chave fantasma por typo)
+    try {
+      $app.findFirstRecordByData('projects', 'project_key', projectKey)
+    } catch (_) {
+      throw new BadRequestError('Projeto não encontrado para a chave informada.')
+    }
+
     let target = null
     try {
       target = $app.findRecordById('_pb_users_auth_', userId)
