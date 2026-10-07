@@ -80,17 +80,26 @@ export default function PainelProjetos() {
   const [membroRole, setMembroRole] = useState<Papel>('consultor')
   const [membroMsg, setMembroMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  interface Projeto {
+    project_key: string
+    name: string
+    stage: string
+  }
+  const [projetos, setProjetos] = useState<Projeto[]>([])
+
   const carregarCatalogos = async () => {
     if (clientes.length > 0) return
     try {
-      const [c, s, u] = await Promise.all([
+      const [c, s, u, p] = await Promise.all([
         pb.send('/backend/v1/clients', { method: 'GET' }),
         pb.send('/backend/v1/service-types', { method: 'GET' }),
         pb.send('/backend/v1/users', { method: 'GET' }),
+        pb.send('/backend/v1/projects', { method: 'GET' }),
       ])
       setClientes((c as { items: Cliente[] }).items)
       setServicos((s as { items: Servico[] }).items)
       setUsuarios((u as { items: Usuario[] }).items)
+      setProjetos((p as { items: Projeto[] }).items)
     } catch {
       // Catálogos ficam vazios; os selects mostram placeholder e o usuário recarrega a página.
     }
@@ -194,8 +203,8 @@ export default function PainelProjetos() {
   const concederVinculo = async (e: FormEvent) => {
     e.preventDefault()
     setMembroMsg(null)
-    if (!membroUserId || !membroProjKey.trim()) {
-      setMembroMsg({ ok: false, text: 'Selecione o usuário e informe a chave do projeto.' })
+    if (!membroUserId || !membroProjKey) {
+      setMembroMsg({ ok: false, text: 'Selecione o usuário e o projeto.' })
       return
     }
     setCarregando(true)
@@ -204,13 +213,13 @@ export default function PainelProjetos() {
         method: 'POST',
         body: JSON.stringify({
           user_id: membroUserId,
-          project_key: membroProjKey.trim().toUpperCase(),
+          project_key: membroProjKey,
           project_role: membroRole,
         }),
       })
       setMembroMsg({
         ok: true,
-        text: `Vínculo concedido: ${usuarios.find((u) => u.id === membroUserId)?.email ?? 'usuário'} como ${membroRole} no projeto ${membroProjKey.trim().toUpperCase()}.`,
+        text: `Vínculo concedido: ${usuarios.find((u) => u.id === membroUserId)?.email ?? 'usuário'} como ${membroRole} no projeto ${membroProjKey}.`,
       })
       setMembroUserId('')
       setMembroProjKey('')
@@ -565,14 +574,20 @@ export default function PainelProjetos() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                      Chave do projeto *
+                      Projeto *
                     </Label>
-                    <Input
-                      value={membroProjKey}
-                      onChange={(e) => setMembroProjKey(e.target.value)}
-                      placeholder="PROJ-F1-001"
-                      className="h-11 text-sm"
-                    />
+                    <Select value={membroProjKey} onValueChange={setMembroProjKey}>
+                      <SelectTrigger className="w-full h-11 text-sm">
+                        <SelectValue placeholder="Selecione o projeto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projetos.map((p) => (
+                          <SelectItem key={p.project_key} value={p.project_key}>
+                            {p.name ? `${p.project_key} — ${p.name}` : p.project_key}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
