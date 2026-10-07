@@ -8,6 +8,10 @@ import {
   AlertCircle,
   UserPlus,
   ArrowLeft,
+  ListFilter,
+  Archive,
+  Pencil,
+  RefreshCw,
 } from 'lucide-react'
 import { useAuth, translateAuthError, type Papel } from '@/contexts/AuthContext'
 import { BeneraLogo } from '@/components/BeneraLogo'
@@ -21,6 +25,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
 
 interface Cliente {
@@ -38,6 +49,35 @@ interface Usuario {
   name: string
   role: Papel
 }
+interface Projeto {
+  project_key: string
+  name: string
+  stage: string
+  priority: string
+  due_date: string
+  next_action: string
+  owner_id: string
+  atrasado: boolean
+}
+interface Cartao {
+  project_key: string
+  name: string
+  client_name: string
+  service_name: string
+  stage: string
+  priority: string
+  due_date: string
+  next_action: string
+  owner_id: string
+  active: boolean
+}
+interface EventoTimeline {
+  id: string
+  actor_email: string
+  action: string
+  detail: string
+  created: string
+}
 
 const ETAPAS = ['Entrada', 'Kick-off', 'Diagnóstico', 'Entrega', 'Encerrado']
 const PRIORIDADES = [
@@ -46,12 +86,28 @@ const PRIORIDADES = [
   { value: 'alta', label: 'Alta' },
 ]
 
+const PAPEIS_PROJETO: Record<string, string> = {
+  admin: 'Administrador',
+  lider: 'Líder',
+  consultor: 'Consultor',
+  revisor: 'Revisor',
+}
+
 export default function PainelProjetos() {
-  const { isAdmin, isLider, criarConvite } = useAuth()
+  const { isAdmin, isLider } = useAuth()
   const podeCadastrar = isAdmin || isLider
 
   // Estado: aba ativa
-  const [aba, setAba] = useState<'projeto' | 'cliente' | 'membros'>('projeto')
+  const [aba, setAba] = useState<'projeto' | 'cliente' | 'membros' | 'carteira'>('carteira')
+
+  // Carteira (listagem + filtros)
+  const [lista, setLista] = useState<Projeto[]>([])
+  const [fEtapa, setFEtapa] = useState('')
+  const [fPrioridade, setFPrioridade] = useState('')
+  const [fAtraso, setFAtraso] = useState(false)
+  const [fOwner, setFOwner] = useState('')
+  const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [carregandoLista, setCarregandoLista] = useState(false)
 
   // Formulário de cliente
   const [clienteNome, setClienteNome] = useState('')
@@ -63,7 +119,6 @@ export default function PainelProjetos() {
   const [projNome, setProjNome] = useState('')
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [servicos, setServicos] = useState<Servico[]>([])
-  const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [clienteId, setClienteId] = useState('')
   const [servicoId, setServicoId] = useState('')
   const [ownerId, setOwnerId] = useState('')
@@ -79,13 +134,17 @@ export default function PainelProjetos() {
   const [membroProjKey, setMembroProjKey] = useState('')
   const [membroRole, setMembroRole] = useState<Papel>('consultor')
   const [membroMsg, setMembroMsg] = useState<{ ok: boolean; text: string } | null>(null)
-
-  interface Projeto {
-    project_key: string
-    name: string
-    stage: string
-  }
   const [projetos, setProjetos] = useState<Projeto[]>([])
+
+  // Cartão 360
+  const [cartaoAberto, setCartaoAberto] = useState<Projeto | null>(null)
+  const [cartao, setCartao] = useState<Cartao | null>(null)
+  const [timeline, setTimeline] = useState<EventoTimeline[]>([])
+  const [editPrioridade, setEditPrioridade] = useState('')
+  const [editPrazo, setEditPrazo] = useState('')
+  const [editOwner, setEditOwner] = useState('')
+  const [editAcao, setEditAcao] = useState('')
+  const [editMsg, setEditMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const carregarCatalogos = async () => {
     if (clientes.length > 0) return
@@ -102,6 +161,104 @@ export default function PainelProjetos() {
       setProjetos((p as { items: Projeto[] }).items)
     } catch {
       // Catálogos ficam vazios; os selects mostram placeholder e o usuário recarrega a página.
+    }
+  }
+
+  const carregarCarteira = async () => {
+    setCarregandoLista(true)
+    try {
+      const params = new URLSearchParams()
+      if (fEtapa) params.set('etapa', fEtapa)
+      if (fPrioridade) params.set('prioridade', fPrioridade)
+      if (fAtraso) params.set('atraso', '1')
+      if (fOwner) params.set('owner', fOwner)
+      const r = await pb.send(
+        '/backend/v1/projects' + (params.toString() ? '?' + params.toString() : ''),
+        {
+          method: 'GET',
+        },
+      )
+      setLista((r as { items: Projeto[] }).items)
+    } catch {
+      setLista([])
+    } finally {
+      setCarregandoLista(false)
+    }
+  }
+
+  const abrirCartao = async (p: Projeto) => {
+    setCartaoAberto(p)
+    setCartao(null)
+    setTimeline([])
+    setEditMsg(null)
+    try {
+      const [c, t] = await Promise.all([
+        pb.send('/backend/v1/projects/' + p.project_key, { method: 'GET' }),
+        pb.send('/backend/v1/projects/' + p.project_key + '/timeline', { method: 'GET' }),
+      ])
+      setCartao(c as Cartao)
+      setTimeline((t as { items: EventoTimeline[] }).items)
+      setEditPrioridade((c as Cartao).priority)
+      setEditPrazo((c as Cartao).due_date)
+      setEditAcao((c as Cartao).next_action)
+      if (usuarios.length === 0) {
+        try {
+          const u = await pb.send('/backend/v1/users', { method: 'GET' })
+          setUsuarios((u as { items: Usuario[] }).items)
+        } catch {
+          // Sem lista de usuários: edição de responsável fica indisponível.
+        }
+      }
+      setEditOwner((c as Cartao).owner_id)
+    } catch {
+      setCartao(null)
+      setEditMsg({ ok: false, text: 'Não foi possível abrir o cartão do projeto.' })
+    }
+  }
+
+  const salvarEdicao = async () => {
+    if (!cartao) return
+    setEditMsg(null)
+    setCarregando(true)
+    try {
+      await pb.send('/backend/v1/projects/' + cartao.project_key, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          priority: editPrioridade,
+          due_date: editPrazo,
+          owner_id: editOwner,
+          next_action: editAcao,
+        }),
+      })
+      setEditMsg({ ok: true, text: 'Alteração salva e registrada na auditoria.' })
+      const t = await pb.send('/backend/v1/projects/' + cartao.project_key + '/timeline', {
+        method: 'GET',
+      })
+      setTimeline((t as { items: EventoTimeline[] }).items)
+      await carregarCarteira()
+    } catch (err) {
+      setEditMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const inativar = async () => {
+    if (!cartao) return
+    setEditMsg(null)
+    setCarregando(true)
+    try {
+      await pb.send('/backend/v1/projects/' + cartao.project_key + '/inativar', { method: 'PATCH' })
+      setEditMsg({ ok: true, text: 'Projeto inativado. Histórico preservado na timeline.' })
+      const t = await pb.send('/backend/v1/projects/' + cartao.project_key + '/timeline', {
+        method: 'GET',
+      })
+      setTimeline((t as { items: EventoTimeline[] }).items)
+      await carregarCarteira()
+    } catch (err) {
+      setEditMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setCarregando(false)
     }
   }
 
@@ -193,6 +350,7 @@ export default function PainelProjetos() {
       setPrioridade('media')
       setPrazo('')
       setProximaAcao('')
+      setProjetos([])
     } catch (err) {
       setProjMsg({ ok: false, text: translateAuthError(err) })
     } finally {
@@ -236,7 +394,8 @@ export default function PainelProjetos() {
       type="button"
       onClick={() => {
         setAba(id)
-        if (id !== 'cliente') carregarCatalogos()
+        if (id === 'carteira') void carregarCarteira()
+        if (id === 'projeto' || id === 'membros') void carregarCatalogos()
       }}
       className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
         aba === id
@@ -249,9 +408,11 @@ export default function PainelProjetos() {
     </button>
   )
 
+  const prioridadeLabel = (p: string) => (p === 'alta' ? 'Alta' : p === 'baixa' ? 'Baixa' : 'Média')
+
   return (
     <div className="min-h-screen w-full flex flex-col justify-between items-center p-6 md:p-12 bg-white md:bg-grid-benera">
-      <div className="w-full max-w-[640px] pt-4 flex items-center justify-between">
+      <div className="w-full max-w-[860px] pt-4 flex items-center justify-between">
         <Link to="/dashboard" className="inline-block">
           <BeneraLogo variant="dark" size="md" />
         </Link>
@@ -264,14 +425,155 @@ export default function PainelProjetos() {
         </Link>
       </div>
 
-      <div className="w-full max-w-[640px] my-auto py-8">
+      <div className="w-full max-w-[860px] my-auto py-8">
         <div className="flex gap-2 mb-6 flex-wrap">
+          {tabBtn('carteira', 'Carteira', <ListFilter className="w-4 h-4" />)}
           {tabBtn('projeto', 'Novo projeto', <FolderPlus className="w-4 h-4" />)}
           {tabBtn('cliente', 'Novo cliente', <Building2 className="w-4 h-4" />)}
           {tabBtn('membros', 'Alocar membro', <UserPlus className="w-4 h-4" />)}
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200/80 p-8 shadow-[0_20px_40px_rgba(0,0,0,0.06)] animate-benera-form">
+          {aba === 'carteira' && (
+            <>
+              <h1 className="text-2xl font-bold text-[#0B3556] tracking-tight mb-2">
+                Carteira de projetos
+              </h1>
+              <p className="text-sm text-[#4B5563] mb-6">
+                Clique em um projeto para abrir o cartão 360. Filtre por etapa, prioridade e atraso.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
+                <Select value={fEtapa} onValueChange={setFEtapa}>
+                  <SelectTrigger className="w-full h-10 text-sm">
+                    <SelectValue placeholder="Etapa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas as etapas</SelectItem>
+                    {ETAPAS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={fPrioridade} onValueChange={setFPrioridade}>
+                  <SelectTrigger className="w-full h-10 text-sm">
+                    <SelectValue placeholder="Prioridade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas as prioridades</SelectItem>
+                    {PRIORIDADES.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={fOwner} onValueChange={setFOwner}>
+                  <SelectTrigger className="w-full h-10 text-sm">
+                    <SelectValue placeholder="Responsável" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os responsáveis</SelectItem>
+                    {usuarios.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name || u.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant={fAtraso ? 'default' : 'outline'}
+                  onClick={() => setFAtraso(!fAtraso)}
+                  className="h-10 text-sm gap-2"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  {fAtraso ? 'Só atrasados' : 'Incluir atrasados'}
+                </Button>
+              </div>
+
+              <div className="flex gap-2 mb-6">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void carregarCarteira()}
+                  className="gap-2"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Atualizar
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setFEtapa('')
+                    setFPrioridade('')
+                    setFAtraso(false)
+                    setFOwner('')
+                  }}
+                  className="gap-2 text-slate-500"
+                >
+                  Limpar filtros
+                </Button>
+              </div>
+
+              {carregandoLista ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#0B3556]" />
+                </div>
+              ) : lista.length === 0 ? (
+                <div className="text-center py-12 text-sm text-slate-500">
+                  Nenhum projeto encontrado com os filtros atuais.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {lista.map((p) => (
+                    <button
+                      key={p.project_key}
+                      type="button"
+                      onClick={() => void abrirCartao(p)}
+                      className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-[#0B3556] hover:shadow-md transition-all bg-white"
+                    >
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <div className="font-semibold text-[#0B3556] text-sm">
+                            {p.project_key} — {p.name}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            Próxima ação: {p.next_action}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
+                            {p.stage}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-xs font-medium ${
+                              p.priority === 'alta'
+                                ? 'bg-red-100 text-red-700'
+                                : p.priority === 'media'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {prioridadeLabel(p.priority)}
+                          </span>
+                          {p.atrasado && (
+                            <span className="px-2 py-0.5 rounded-md bg-red-600 text-white text-xs font-semibold">
+                              Atrasado
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-400">Prazo: {p.due_date}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
           {aba === 'projeto' && (
             <>
               <h1 className="text-2xl font-bold text-[#0B3556] tracking-tight mb-2">
@@ -532,8 +834,7 @@ export default function PainelProjetos() {
                 Alocar membro no projeto
               </h1>
               <p className="text-sm text-[#4B5563] mb-6">
-                Conceda acesso de um usuário a um projeto. A revogação também fica aqui (em breve:
-                listagem com botão de revogar).
+                Selecione o projeto da lista cadastrada e conceda acesso a um usuário.
               </p>
 
               {membroMsg && (
@@ -626,9 +927,171 @@ export default function PainelProjetos() {
         </div>
       </div>
 
-      <footer className="w-full text-center pb-4 text-xs text-slate-400">
-        © 2025 Benera Consultoria. Todos os direitos reservados.
-      </footer>
+      {/* Cartão 360 (dialog) */}
+      <Dialog open={!!cartaoAberto} onOpenChange={(open) => !open && setCartaoAberto(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-[#0B3556] flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-[#C9A24B]" />
+              <span>
+                {cartao ? `${cartao.project_key} — ${cartao.name}` : cartaoAberto?.project_key}
+              </span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              {cartao ? `${cartao.client_name} · ${cartao.service_name}` : 'Carregando...'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {cartao ? (
+            <div className="space-y-5 py-1">
+              {/* Campos do cartão */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">Etapa</div>
+                  <div className="font-semibold text-[#0B3556] mt-0.5">{cartao.stage}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">Prioridade</div>
+                  <div className="font-semibold text-[#0B3556] mt-0.5">
+                    {prioridadeLabel(cartao.priority)}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-slate-500">Prazo</div>
+                  <div className="font-semibold text-[#0B3556] mt-0.5">{cartao.due_date}</div>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 col-span-2 sm:col-span-3">
+                  <div className="text-slate-500">Próxima ação</div>
+                  <div className="font-semibold text-[#0B3556] mt-0.5">{cartao.next_action}</div>
+                </div>
+              </div>
+
+              {editMsg && (
+                <div
+                  className={`p-3.5 rounded-lg flex items-start gap-3 text-sm ${
+                    editMsg.ok
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                      : 'bg-red-50 border border-red-200 text-red-700'
+                  }`}
+                >
+                  {editMsg.ok ? (
+                    <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  )}
+                  <div className="leading-snug">{editMsg.text}</div>
+                </div>
+              )}
+
+              {/* Edição (admin/líder) */}
+              <div className="p-4 rounded-xl border border-slate-200 space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                  Editar projeto
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-slate-600">Prioridade</Label>
+                    <Select value={editPrioridade} onValueChange={setEditPrioridade}>
+                      <SelectTrigger className="w-full h-10 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PRIORIDADES.map((p) => (
+                          <SelectItem key={p.value} value={p.value}>
+                            {p.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-slate-600">Prazo</Label>
+                    <Input
+                      type="date"
+                      value={editPrazo}
+                      onChange={(e) => setEditPrazo(e.target.value)}
+                      className="h-10 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-slate-600">Responsável</Label>
+                    <Select value={editOwner} onValueChange={setEditOwner}>
+                      <SelectTrigger className="w-full h-10 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {usuarios.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name || u.email} ({u.role})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-slate-600">Próxima ação</Label>
+                    <Input
+                      value={editAcao}
+                      onChange={(e) => setEditAcao(e.target.value)}
+                      className="h-10 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => void salvarEdicao()}
+                    disabled={carregando}
+                    className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Salvar alterações
+                  </Button>
+                  {cartao.active && (
+                    <Button
+                      onClick={() => void inativar()}
+                      disabled={carregando}
+                      variant="outline"
+                      className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                    >
+                      <Archive className="w-4 h-4" />
+                      Inativar projeto
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Timeline (auditoria) */}
+              <div className="p-4 rounded-xl border border-slate-200">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-3">
+                  Histórico (auditoria)
+                </div>
+                <div className="space-y-2">
+                  {timeline.map((ev) => (
+                    <div key={ev.id} className="text-xs flex gap-3 items-start">
+                      <span className="text-slate-400 whitespace-nowrap font-mono">
+                        {ev.created.slice(0, 16)}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium whitespace-nowrap">
+                        {ev.action}
+                      </span>
+                      <span className="text-slate-600 leading-snug">
+                        {ev.detail} — {ev.actor_email}
+                      </span>
+                    </div>
+                  ))}
+                  {timeline.length === 0 && (
+                    <div className="text-xs text-slate-400">Nenhum evento registrado.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-6 h-6 animate-spin text-[#0B3556]" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
