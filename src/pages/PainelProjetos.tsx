@@ -185,6 +185,7 @@ export default function PainelProjetos() {
   useEffect(() => {
     void carregarCarteira()
     void carregarCatalogos()
+    void carregarEsteira()
   }, [])
 
   const carregarCatalogos = async () => {
