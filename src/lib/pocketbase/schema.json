@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-08T19:22:00.785Z",
+  "generatedAt": "2026-10-08T19:23:41.176Z",
   "collections": [
     {
       "name": "users",
@@ -448,30 +448,6 @@
           "collectionRef": "users"
         },
         {
-          "name": "stage",
-          "type": "select",
-          "required": true,
-          "system": false,
-          "selectValues": [
-            "Entrada",
-            "Kick-off",
-            "Diagnóstico",
-            "Entrega",
-            "Encerrado"
-          ]
-        },
-        {
-          "name": "priority",
-          "type": "select",
-          "required": true,
-          "system": false,
-          "selectValues": [
-            "baixa",
-            "media",
-            "alta"
-          ]
-        },
-        {
           "name": "due_date",
           "type": "date",
           "required": true,
@@ -525,6 +501,18 @@
           "name": "pipeline_version",
           "type": "number",
           "required": false,
+          "system": false
+        },
+        {
+          "name": "stage",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "priority",
+          "type": "text",
+          "required": true,
           "system": false
         }
       ],
