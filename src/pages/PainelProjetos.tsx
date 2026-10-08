@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Building2,
@@ -12,6 +12,10 @@ import {
   Archive,
   Pencil,
   RefreshCw,
+  Settings2,
+  ArrowRight,
+  Ban,
+  History,
 } from 'lucide-react'
 import { useAuth, translateAuthError, type Papel } from '@/contexts/AuthContext'
 import { BeneraLogo } from '@/components/BeneraLogo'
@@ -78,13 +82,24 @@ interface EventoTimeline {
   detail: string
   created: string
 }
-
-const ETAPAS = ['Entrada', 'Kick-off', 'Diagnóstico', 'Entrega', 'Encerrado']
-const PRIORIDADES = [
-  { value: 'baixa', label: 'Baixa' },
-  { value: 'media', label: 'Média' },
-  { value: 'alta', label: 'Alta' },
-]
+interface Etapa {
+  id: string
+  name: string
+  ordem: number
+  entry_criteria: string
+  entry_requires: string[]
+}
+interface VersaoEsteira {
+  version: number
+  diff: string
+  active_version: boolean
+  created: string
+}
+interface Prioridade {
+  id: string
+  name: string
+  value: string
+}
 
 const PAPEIS_PROJETO: Record<string, string> = {
   admin: 'Administrador',
@@ -96,14 +111,16 @@ const PAPEIS_PROJETO: Record<string, string> = {
 export default function PainelProjetos() {
   const { isAdmin, isLider, user } = useAuth()
   const podeCadastrar = isAdmin || isLider
-  // Consultor e revisor entram na página: veem só a Carteira (escopo por vínculo, aplicado no servidor).
   const podeVerCarteira = !!user
 
   // Estado: aba ativa
-  const [aba, setAba] = useState<'projeto' | 'cliente' | 'membros' | 'carteira'>('carteira')
+  const [aba, setAba] = useState<'carteira' | 'esteira' | 'projeto' | 'cliente' | 'membros'>(
+    'carteira',
+  )
 
-  // Carteira (listagem + filtros)
+  // Carteira (listagem + filtros) — carrega automaticamente
   const [lista, setLista] = useState<Projeto[]>([])
+  const [listaCarregada, setListaCarregada] = useState(false)
   const [fEtapa, setFEtapa] = useState('')
   const [fPrioridade, setFPrioridade] = useState('')
   const [fAtraso, setFAtraso] = useState(false)
@@ -121,11 +138,12 @@ export default function PainelProjetos() {
   const [projNome, setProjNome] = useState('')
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [servicos, setServicos] = useState<Servico[]>([])
+  const [prioridades, setPrioridades] = useState<Prioridade[]>([])
   const [clienteId, setClienteId] = useState('')
   const [servicoId, setServicoId] = useState('')
   const [ownerId, setOwnerId] = useState('')
-  const [etapa, setEtapa] = useState('Entrada')
-  const [prioridade, setPrioridade] = useState('media')
+  const [etapa, setEtapa] = useState('')
+  const [prioridade, setPrioridade] = useState('')
   const [prazo, setPrazo] = useState('')
   const [proximaAcao, setProximaAcao] = useState('')
   const [projMsg, setProjMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -147,44 +165,122 @@ export default function PainelProjetos() {
   const [editOwner, setEditOwner] = useState('')
   const [editAcao, setEditAcao] = useState('')
   const [editMsg, setEditMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [transicaoDestino, setTransicaoDestino] = useState('')
+  const [kickoffInput, setKickoffInput] = useState('')
+
+  // Esteira (painel de controle)
+  const [etapasEsteira, setEtapasEsteira] = useState<Etapa[]>([])
+  const [versoesEsteira, setVersoesEsteira] = useState<VersaoEsteira[]>([])
+  const [esteiraMsg, setEsteiraMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [prioItens, setPrioItens] = useState<{ name: string; value: string; ordem: number }[]>([])
+  const [prioMsg, setPrioMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  // Carrega a carteira automaticamente ao abrir a página (lista já aparece; filtro é opcional)
+  useEffect(() => {
+    void carregarCarteira()
+    void carregarCatalogos()
+  }, [])
 
   const carregarCatalogos = async () => {
     if (clientes.length > 0) return
     try {
-      const [c, s, u, p] = await Promise.all([
+      const [c, s, u, p, pr] = await Promise.all([
         pb.send('/backend/v1/clients', { method: 'GET' }),
         pb.send('/backend/v1/service-types', { method: 'GET' }),
         pb.send('/backend/v1/users', { method: 'GET' }),
         pb.send('/backend/v1/projects', { method: 'GET' }),
+        pb.send('/backend/v1/priorities', { method: 'GET' }),
       ])
       setClientes((c as { items: Cliente[] }).items)
       setServicos((s as { items: Servico[] }).items)
       setUsuarios((u as { items: Usuario[] }).items)
       setProjetos((p as { items: Projeto[] }).items)
+      setPrioridades((pr as { items: Prioridade[] }).items)
     } catch {
       // Catálogos ficam vazios; os selects mostram placeholder e o usuário recarrega a página.
     }
   }
 
-  const carregarCarteira = async () => {
+  const carregarCarteira = async (forcar = false) => {
+    if (listaCarregada && !forcar && !fEtapa && !fPrioridade && !fAtraso && !fOwner) return
     setCarregandoLista(true)
     try {
       const params = new URLSearchParams()
-      if (fEtapa) params.set('etapa', fEtapa)
-      if (fPrioridade) params.set('prioridade', fPrioridade)
+      if (fEtapa && fEtapa !== 'todas') params.set('etapa', fEtapa)
+      if (fPrioridade && fPrioridade !== 'todas') params.set('prioridade', fPrioridade)
       if (fAtraso) params.set('atraso', '1')
-      if (fOwner) params.set('owner', fOwner)
+      if (fOwner && fOwner !== 'todos') params.set('owner', fOwner)
       const r = await pb.send(
         '/backend/v1/projects' + (params.toString() ? '?' + params.toString() : ''),
-        {
-          method: 'GET',
-        },
+        { method: 'GET' },
       )
       setLista((r as { items: Projeto[] }).items)
+      setListaCarregada(true)
     } catch {
       setLista([])
     } finally {
       setCarregandoLista(false)
+    }
+  }
+
+  const carregarEsteira = async () => {
+    try {
+      const [e, v, pr] = await Promise.all([
+        pb.send('/backend/v1/pipeline', { method: 'GET' }),
+        pb.send('/backend/v1/pipeline/versions', { method: 'GET' }),
+        pb.send('/backend/v1/priorities', { method: 'GET' }),
+      ])
+      setEtapasEsteira((e as { items: Etapa[] }).items)
+      setVersoesEsteira((v as { items: VersaoEsteira[] }).items)
+      const prios = (pr as { items: Prioridade[] }).items
+      setPrioridades(prios)
+      setPrioItens(prios.map((p, i) => ({ name: p.name, value: p.value, ordem: i + 1 })))
+    } catch {
+      setEsteiraMsg({ ok: false, text: 'Não foi possível carregar a esteira.' })
+    }
+  }
+
+  const salvarEsteira = async () => {
+    setEsteiraMsg(null)
+    setCarregando(true)
+    try {
+      const stages = etapasEsteira.map((e) => ({
+        name: e.name,
+        ordem: e.ordem,
+        entry_criteria: e.entry_criteria,
+        entry_requires: e.entry_requires,
+      }))
+      const r = await pb.send('/backend/v1/pipeline', {
+        method: 'PUT',
+        body: JSON.stringify({ stages: JSON.stringify(stages) }),
+      })
+      const d = r as { version: number; diff: string }
+      setEsteiraMsg({
+        ok: true,
+        text: `Versão ${d.version} salva. Diff: ${d.diff}`,
+      })
+      await carregarEsteira()
+    } catch (err) {
+      setEsteiraMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const salvarPrioridades = async () => {
+    setPrioMsg(null)
+    setCarregando(true)
+    try {
+      await pb.send('/backend/v1/priorities', {
+        method: 'PUT',
+        body: JSON.stringify({ items: JSON.stringify(prioItens) }),
+      })
+      setPrioMsg({ ok: true, text: 'Catálogo de prioridades atualizado.' })
+      await carregarEsteira()
+    } catch (err) {
+      setPrioMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setCarregando(false)
     }
   }
 
@@ -193,6 +289,8 @@ export default function PainelProjetos() {
     setCartao(null)
     setTimeline([])
     setEditMsg(null)
+    setTransicaoDestino('')
+    setKickoffInput('')
     try {
       const [c, t] = await Promise.all([
         pb.send('/backend/v1/projects/' + p.project_key, { method: 'GET' }),
@@ -237,7 +335,35 @@ export default function PainelProjetos() {
         method: 'GET',
       })
       setTimeline((t as { items: EventoTimeline[] }).items)
-      await carregarCarteira()
+      await carregarCarteira(true)
+    } catch (err) {
+      setEditMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const fazerTransicao = async () => {
+    if (!cartao || !transicaoDestino) return
+    setEditMsg(null)
+    setCarregando(true)
+    try {
+      const body: Record<string, string> = { destino: transicaoDestino }
+      if (kickoffInput) body.kickoff_date = kickoffInput
+      await pb.send('/backend/v1/projects/' + cartao.project_key + '/transicao', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+      setEditMsg({ ok: true, text: `Projeto movido para "${transicaoDestino}".` })
+      const [c, t] = await Promise.all([
+        pb.send('/backend/v1/projects/' + cartao.project_key, { method: 'GET' }),
+        pb.send('/backend/v1/projects/' + cartao.project_key + '/timeline', { method: 'GET' }),
+      ])
+      setCartao(c as Cartao)
+      setTimeline((t as { items: EventoTimeline[] }).items)
+      setTransicaoDestino('')
+      setKickoffInput('')
+      await carregarCarteira(true)
     } catch (err) {
       setEditMsg({ ok: false, text: translateAuthError(err) })
     } finally {
@@ -256,7 +382,7 @@ export default function PainelProjetos() {
         method: 'GET',
       })
       setTimeline((t as { items: EventoTimeline[] }).items)
-      await carregarCarteira()
+      await carregarCarteira(true)
     } catch (err) {
       setEditMsg({ ok: false, text: translateAuthError(err) })
     } finally {
@@ -316,6 +442,8 @@ export default function PainelProjetos() {
     if (!clienteId) faltando.push('Cliente')
     if (!servicoId) faltando.push('Tipo de serviço')
     if (!ownerId) faltando.push('Responsável')
+    if (!etapa) faltando.push('Etapa')
+    if (!prioridade) faltando.push('Prioridade')
     if (!prazo) faltando.push('Prazo')
     if (proximaAcao.trim().length < 3) faltando.push('Próxima ação')
     if (faltando.length > 0) {
@@ -348,11 +476,12 @@ export default function PainelProjetos() {
       setClienteId('')
       setServicoId('')
       setOwnerId('')
-      setEtapa('Entrada')
-      setPrioridade('media')
+      setEtapa('')
+      setPrioridade('')
       setPrazo('')
       setProximaAcao('')
       setProjetos([])
+      setListaCarregada(false)
     } catch (err) {
       setProjMsg({ ok: false, text: translateAuthError(err) })
     } finally {
@@ -397,6 +526,7 @@ export default function PainelProjetos() {
       onClick={() => {
         setAba(id)
         if (id === 'carteira') void carregarCarteira()
+        if (id === 'esteira') void carregarEsteira()
         if (id === 'projeto' || id === 'membros') void carregarCatalogos()
       }}
       className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
@@ -410,11 +540,14 @@ export default function PainelProjetos() {
     </button>
   )
 
-  const prioridadeLabel = (p: string) => (p === 'alta' ? 'Alta' : p === 'baixa' ? 'Baixa' : 'Média')
+  const prioridadeLabel = (p: string) => {
+    const found = prioridades.find((x) => x.value === p)
+    return found ? found.name : p
+  }
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-between items-center p-6 md:p-12 bg-white md:bg-grid-benera">
-      <div className="w-full max-w-[860px] pt-4 flex items-center justify-between">
+      <div className="w-full max-w-[900px] pt-4 flex items-center justify-between">
         <Link to="/dashboard" className="inline-block">
           <BeneraLogo variant="dark" size="md" />
         </Link>
@@ -427,9 +560,10 @@ export default function PainelProjetos() {
         </Link>
       </div>
 
-      <div className="w-full max-w-[860px] my-auto py-8">
+      <div className="w-full max-w-[900px] my-auto py-8">
         <div className="flex gap-2 mb-6 flex-wrap">
           {tabBtn('carteira', 'Carteira', <ListFilter className="w-4 h-4" />)}
+          {isAdmin && tabBtn('esteira', 'Esteira', <Settings2 className="w-4 h-4" />)}
           {podeCadastrar && tabBtn('projeto', 'Novo projeto', <FolderPlus className="w-4 h-4" />)}
           {podeCadastrar && tabBtn('cliente', 'Novo cliente', <Building2 className="w-4 h-4" />)}
           {podeCadastrar && tabBtn('membros', 'Alocar membro', <UserPlus className="w-4 h-4" />)}
@@ -442,19 +576,20 @@ export default function PainelProjetos() {
                 Carteira de projetos
               </h1>
               <p className="text-sm text-[#4B5563] mb-6">
-                Clique em um projeto para abrir o cartão 360. Filtre por etapa, prioridade e atraso.
+                Clique em um projeto para abrir o cartão 360. Filtre se quiser — a lista já vem
+                completa.
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
                 <Select value={fEtapa} onValueChange={setFEtapa}>
                   <SelectTrigger className="w-full h-10 text-sm">
                     <SelectValue placeholder="Etapa" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todas">Todas as etapas</SelectItem>
-                    {ETAPAS.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
+                    {etapasEsteira.map((s) => (
+                      <SelectItem key={s.id} value={s.name}>
+                        {s.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -465,9 +600,9 @@ export default function PainelProjetos() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todas">Todas as prioridades</SelectItem>
-                    {PRIORIDADES.map((p) => (
-                      <SelectItem key={p.value} value={p.value}>
-                        {p.label}
+                    {prioridades.map((p) => (
+                      <SelectItem key={p.id} value={p.value}>
+                        {p.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -499,7 +634,7 @@ export default function PainelProjetos() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void carregarCarteira()}
+                  onClick={() => void carregarCarteira(true)}
                   className="gap-2"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -552,7 +687,7 @@ export default function PainelProjetos() {
                           </span>
                           <span
                             className={`px-2 py-0.5 rounded-md text-xs font-medium ${
-                              p.priority === 'alta'
+                              p.priority === 'alta' || p.priority === 'critica'
                                 ? 'bg-red-100 text-red-700'
                                 : p.priority === 'media'
                                   ? 'bg-amber-100 text-amber-700'
@@ -573,6 +708,270 @@ export default function PainelProjetos() {
                   ))}
                 </div>
               )}
+            </>
+          )}
+
+          {aba === 'esteira' && isAdmin && (
+            <>
+              <h1 className="text-2xl font-bold text-[#0B3556] tracking-tight mb-2">
+                Painel da esteira
+              </h1>
+              <p className="text-sm text-[#4B5563] mb-6">
+                Ajuste nomes, ordem e critérios das etapas. Salvar cria uma nova versão — a anterior
+                fica no histórico e pode ser restaurada.
+              </p>
+
+              {esteiraMsg && (
+                <div
+                  className={`mb-6 p-3.5 rounded-lg flex items-start gap-3 text-sm ${
+                    esteiraMsg.ok
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                      : 'bg-red-50 border border-red-200 text-red-700'
+                  }`}
+                >
+                  {esteiraMsg.ok ? (
+                    <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  )}
+                  <div className="leading-snug break-all">{esteiraMsg.text}</div>
+                </div>
+              )}
+
+              <div className="space-y-3 mb-8">
+                {etapasEsteira.map((e, idx) => (
+                  <div key={e.id} className="p-4 rounded-xl border border-slate-200 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-600">Nome da etapa</Label>
+                        <Input
+                          value={e.name}
+                          onChange={(ev) => {
+                            const novo = [...etapasEsteira]
+                            novo[idx] = { ...e, name: ev.target.value }
+                            setEtapasEsteira(novo)
+                          }}
+                          className="h-10 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-600">Ordem</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={e.ordem}
+                          onChange={(ev) => {
+                            const novo = [...etapasEsteira]
+                            novo[idx] = { ...e, ordem: parseInt(ev.target.value) || 1 }
+                            setEtapasEsteira(novo)
+                          }}
+                          className="h-10 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-600">Critério de entrada</Label>
+                        <Input
+                          value={e.entry_criteria}
+                          onChange={(ev) => {
+                            const novo = [...etapasEsteira]
+                            novo[idx] = { ...e, entry_criteria: ev.target.value }
+                            setEtapasEsteira(novo)
+                          }}
+                          className="h-10 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <label className="flex items-center gap-2 text-xs text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={e.entry_requires.includes('kickoff_date')}
+                          onChange={(ev) => {
+                            const novo = [...etapasEsteira]
+                            const reqs = e.entry_requires.filter((r) => r !== 'kickoff_date')
+                            if (ev.target.checked) reqs.push('kickoff_date')
+                            novo[idx] = { ...e, entry_requires: reqs }
+                            setEtapasEsteira(novo)
+                          }}
+                        />
+                        Exige data de kick-off
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:bg-red-50 gap-1.5 h-8"
+                        onClick={() => setEtapasEsteira(etapasEsteira.filter((_, i) => i !== idx))}
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        Remover etapa
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setEtapasEsteira([
+                      ...etapasEsteira,
+                      {
+                        id: 'nova-' + Date.now(),
+                        name: 'Nova etapa',
+                        ordem: etapasEsteira.length + 1,
+                        entry_criteria: '',
+                        entry_requires: [],
+                      },
+                    ])
+                  }
+                  className="gap-2"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  Incluir etapa
+                </Button>
+              </div>
+
+              <Button
+                onClick={() => void salvarEsteira()}
+                disabled={carregando}
+                className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white mb-10"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Salvar nova versão da esteira
+              </Button>
+
+              {/* Prioridades configuráveis */}
+              <h2 className="text-lg font-bold text-[#0B3556] tracking-tight mb-2">Prioridades</h2>
+              <p className="text-sm text-[#4B5563] mb-4">Catálogo editável usado nos projetos.</p>
+
+              {prioMsg && (
+                <div
+                  className={`mb-4 p-3.5 rounded-lg flex items-start gap-3 text-sm ${
+                    prioMsg.ok
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                      : 'bg-red-50 border border-red-200 text-red-700'
+                  }`}
+                >
+                  {prioMsg.ok ? (
+                    <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  )}
+                  <div className="leading-snug">{prioMsg.text}</div>
+                </div>
+              )}
+
+              <div className="space-y-2 mb-4">
+                {prioItens.map((p, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <Input
+                      value={p.name}
+                      onChange={(ev) => {
+                        const novo = [...prioItens]
+                        novo[idx] = { ...p, name: ev.target.value }
+                        setPrioItens(novo)
+                      }}
+                      placeholder="Nome exibido"
+                      className="h-9 text-sm flex-1"
+                    />
+                    <Input
+                      value={p.value}
+                      onChange={(ev) => {
+                        const novo = [...prioItens]
+                        novo[idx] = { ...p, value: ev.target.value.toLowerCase() }
+                        setPrioItens(novo)
+                      }}
+                      placeholder="valor interno"
+                      className="h-9 text-sm w-32"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 h-8 px-2"
+                      onClick={() => setPrioItens(prioItens.filter((_, i) => i !== idx))}
+                    >
+                      <Ban className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setPrioItens([
+                      ...prioItens,
+                      { name: 'Nova prioridade', value: 'nova', ordem: prioItens.length + 1 },
+                    ])
+                  }
+                  className="gap-2"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                  Incluir prioridade
+                </Button>
+              </div>
+              <Button
+                onClick={() => void salvarPrioridades()}
+                disabled={carregando}
+                className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white mb-10"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Salvar prioridades
+              </Button>
+
+              {/* Histórico de versões */}
+              <h2 className="text-lg font-bold text-[#0B3556] tracking-tight mb-2">
+                Histórico de versões
+              </h2>
+              <div className="space-y-2">
+                {versoesEsteira.map((v) => (
+                  <div
+                    key={v.version}
+                    className="p-3 rounded-lg border border-slate-200 flex items-center justify-between gap-3 flex-wrap"
+                  >
+                    <div className="text-xs">
+                      <span
+                        className={`font-semibold ${v.active_version ? 'text-emerald-700' : 'text-slate-600'}`}
+                      >
+                        v{v.version}
+                        {v.active_version ? ' (ativa)' : ''}
+                      </span>
+                      <span className="text-slate-400 ml-2">{v.created.slice(0, 16)}</span>
+                      <div className="text-slate-600 mt-1 break-all">{v.diff}</div>
+                    </div>
+                    {!v.active_version && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 h-8 text-xs"
+                        onClick={async () => {
+                          setEsteiraMsg(null)
+                          setCarregando(true)
+                          try {
+                            const r = await pb.send('/backend/v1/pipeline/restore/' + v.version, {
+                              method: 'POST',
+                            })
+                            const d = r as { version: number; restored_from: number }
+                            setEsteiraMsg({
+                              ok: true,
+                              text: `Versão ${d.version} restaurada a partir da v${d.restored_from}.`,
+                            })
+                            await carregarEsteira()
+                          } catch (err) {
+                            setEsteiraMsg({ ok: false, text: translateAuthError(err) })
+                          } finally {
+                            setCarregando(false)
+                          }
+                        }}
+                      >
+                        <History className="w-3.5 h-3.5" />
+                        Restaurar
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {versoesEsteira.length === 0 && (
+                  <div className="text-xs text-slate-400">Nenhuma versão registrada.</div>
+                )}
+              </div>
             </>
           )}
 
@@ -703,12 +1102,12 @@ export default function PainelProjetos() {
                     </Label>
                     <Select value={etapa} onValueChange={setEtapa}>
                       <SelectTrigger className="w-full h-11 text-sm">
-                        <SelectValue />
+                        <SelectValue placeholder="Selecione a etapa" />
                       </SelectTrigger>
                       <SelectContent>
-                        {ETAPAS.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}
+                        {etapasEsteira.map((s) => (
+                          <SelectItem key={s.id} value={s.name}>
+                            {s.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -720,12 +1119,12 @@ export default function PainelProjetos() {
                     </Label>
                     <Select value={prioridade} onValueChange={setPrioridade}>
                       <SelectTrigger className="w-full h-11 text-sm">
-                        <SelectValue />
+                        <SelectValue placeholder="Selecione a prioridade" />
                       </SelectTrigger>
                       <SelectContent>
-                        {PRIORIDADES.map((p) => (
-                          <SelectItem key={p.value} value={p.value}>
-                            {p.label}
+                        {prioridades.map((p) => (
+                          <SelectItem key={p.id} value={p.value}>
+                            {p.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -827,6 +1226,28 @@ export default function PainelProjetos() {
                   )}
                 </Button>
               </form>
+
+              {/* Lista de clientes com edição inline */}
+              <h2 className="text-lg font-bold text-[#0B3556] tracking-tight mt-10 mb-4">
+                Clientes cadastrados
+              </h2>
+              <div className="space-y-2">
+                {clientes.map((c) => (
+                  <ClienteLinha
+                    key={c.id}
+                    cliente={c}
+                    onAtualizado={async () => {
+                      setClientes([])
+                      await carregarCatalogos()
+                    }}
+                  />
+                ))}
+                {clientes.length === 0 && (
+                  <div className="text-xs text-slate-400">
+                    Abra a aba novamente para carregar os clientes.
+                  </div>
+                )}
+              </div>
             </>
           )}
 
@@ -985,82 +1406,131 @@ export default function PainelProjetos() {
                 </div>
               )}
 
-              {/* Edição (admin/líder) */}
-              <div className="p-4 rounded-xl border border-slate-200 space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                  Editar projeto
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-slate-600">Prioridade</Label>
-                    <Select value={editPrioridade} onValueChange={setEditPrioridade}>
-                      <SelectTrigger className="w-full h-10 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PRIORIDADES.map((p) => (
-                          <SelectItem key={p.value} value={p.value}>
-                            {p.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              {/* Mover etapa (admin/líder) — motor da T1.5 pela tela */}
+              {podeCadastrar && cartao.active && (
+                <div className="p-4 rounded-xl border border-slate-200 space-y-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                    Mover etapa
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-slate-600">Prazo</Label>
-                    <Input
-                      type="date"
-                      value={editPrazo}
-                      onChange={(e) => setEditPrazo(e.target.value)}
-                      className="h-10 text-sm"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-600">Destino</Label>
+                      <Select value={transicaoDestino} onValueChange={setTransicaoDestino}>
+                        <SelectTrigger className="w-full h-10 text-sm">
+                          <SelectValue placeholder="Selecione a etapa destino" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {etapasEsteira
+                            .filter((s) => s.name !== cartao.stage)
+                            .map((s) => (
+                              <SelectItem key={s.id} value={s.name}>
+                                {s.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-600">
+                        Data de kick-off (se o destino exigir)
+                      </Label>
+                      <Input
+                        type="date"
+                        value={kickoffInput}
+                        onChange={(e) => setKickoffInput(e.target.value)}
+                        className="h-10 text-sm"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-slate-600">Responsável</Label>
-                    <Select value={editOwner} onValueChange={setEditOwner}>
-                      <SelectTrigger className="w-full h-10 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {usuarios.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            {u.name || u.email} ({u.role})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-slate-600">Próxima ação</Label>
-                    <Input
-                      value={editAcao}
-                      onChange={(e) => setEditAcao(e.target.value)}
-                      className="h-10 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2">
                   <Button
-                    onClick={() => void salvarEdicao()}
-                    disabled={carregando}
+                    onClick={() => void fazerTransicao()}
+                    disabled={carregando || !transicaoDestino}
                     className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Salvar alterações
+                    <ArrowRight className="w-4 h-4" />
+                    Mover para a etapa
                   </Button>
-                  {cartao.active && (
-                    <Button
-                      onClick={() => void inativar()}
-                      disabled={carregando}
-                      variant="outline"
-                      className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
-                    >
-                      <Archive className="w-4 h-4" />
-                      Inativar projeto
-                    </Button>
-                  )}
                 </div>
-              </div>
+              )}
+
+              {/* Edição (admin/líder) */}
+              {podeCadastrar && (
+                <div className="p-4 rounded-xl border border-slate-200 space-y-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                    Editar projeto
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-600">Prioridade</Label>
+                      <Select value={editPrioridade} onValueChange={setEditPrioridade}>
+                        <SelectTrigger className="w-full h-10 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {prioridades.map((p) => (
+                            <SelectItem key={p.id} value={p.value}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-600">Prazo</Label>
+                      <Input
+                        type="date"
+                        value={editPrazo}
+                        onChange={(e) => setEditPrazo(e.target.value)}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-600">Responsável</Label>
+                      <Select value={editOwner} onValueChange={setEditOwner}>
+                        <SelectTrigger className="w-full h-10 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {usuarios.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name || u.email} ({u.role})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-slate-600">Próxima ação</Label>
+                      <Input
+                        value={editAcao}
+                        onChange={(e) => setEditAcao(e.target.value)}
+                        className="h-10 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => void salvarEdicao()}
+                      disabled={carregando}
+                      className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Salvar alterações
+                    </Button>
+                    {cartao.active && (
+                      <Button
+                        onClick={() => void inativar()}
+                        disabled={carregando}
+                        variant="outline"
+                        className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        <Archive className="w-4 h-4" />
+                        Inativar projeto
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Timeline (auditoria) */}
               <div className="p-4 rounded-xl border border-slate-200">
@@ -1094,6 +1564,86 @@ export default function PainelProjetos() {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// Linha de cliente com edição inline (nome/documento)
+function ClienteLinha({
+  cliente,
+  onAtualizado,
+}: {
+  cliente: Cliente
+  onAtualizado: () => Promise<void>
+}) {
+  const [editando, setEditando] = useState(false)
+  const [nome, setNome] = useState(cliente.name)
+  const [doc, setDoc] = useState(cliente.document)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [salvando, setSalvando] = useState(false)
+
+  const salvar = async () => {
+    setMsg(null)
+    setSalvando(true)
+    try {
+      await pb.send('/backend/v1/clients/' + cliente.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: nome, document: doc }),
+      })
+      setMsg({ ok: true, text: 'Cliente atualizado.' })
+      setEditando(false)
+      await onAtualizado()
+    } catch (err) {
+      setMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <div className="p-4 rounded-xl border border-slate-200">
+      {editando ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              className="h-10 text-sm"
+            />
+            <Input value={doc} onChange={(e) => setDoc(e.target.value)} className="h-10 text-sm" />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => void salvar()}
+              disabled={salvando}
+              className="gap-1.5 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Salvar
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setEditando(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="font-semibold text-[#0B3556] text-sm">{cliente.name}</div>
+            <div className="text-xs text-slate-500">{cliente.document || 'sem documento'}</div>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setEditando(true)} className="gap-1.5">
+            <Pencil className="w-3.5 h-3.5" />
+            Editar
+          </Button>
+        </div>
+      )}
+      {msg && (
+        <div className={`mt-2 text-xs ${msg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+          {msg.text}
+        </div>
+      )}
     </div>
   )
 }
