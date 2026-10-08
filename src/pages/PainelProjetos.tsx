@@ -291,6 +291,19 @@ export default function PainelProjetos() {
     setEditMsg(null)
     setTransicaoDestino('')
     setKickoffInput('')
+    // Etapas da esteira precisam estar carregadas para o dropdown "Destino" (o admin pode
+    // nunca ter aberto a aba Esteira nesta sessão)
+    if (etapasEsteira.length === 0) {
+      void carregarEsteira()
+    }
+    if (prioridades.length === 0) {
+      try {
+        const pr = await pb.send('/backend/v1/priorities', { method: 'GET' })
+        setPrioridades((pr as { items: Prioridade[] }).items)
+      } catch {
+        // Prioridades ficam com o valor bruto no cartão até recarregar a página.
+      }
+    }
     try {
       const [c, t] = await Promise.all([
         pb.send('/backend/v1/projects/' + p.project_key, { method: 'GET' }),
