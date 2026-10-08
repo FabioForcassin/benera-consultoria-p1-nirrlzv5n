@@ -8,11 +8,36 @@ routerAdd(
   (e) => {
     if (e.hasSuperuserAuth()) return e.next()
     const auth = e.auth
-    if (!auth || (auth.get('role') !== 'admin' && auth.get('role') !== 'lider')) {
-      return e.forbiddenError('Somente administrador ou líder podem mover o projeto de etapa.')
-    }
+    if (!auth) return e.unauthorizedError('Autenticação necessária.')
 
     const projectKey = e.request.pathValue('key')
+    const papel = auth.getString('role')
+    const podeGlobal = papel === 'admin' || papel === 'lider'
+
+    // Consultor/revisor movem somente projetos com vínculo (SPEC-1-003: "líder e consultor ...
+    // só realizam transições válidas"); admin/líder movem qualquer projeto.
+    if (!podeGlobal) {
+      const vinculos = $app.findRecordsByFilter(
+        'project_members',
+        'user_id = {:uid} && project_key = {:pk}',
+        '-created',
+        1,
+        0,
+        { uid: auth.id, pk: projectKey },
+      )
+      if (vinculos.length === 0) {
+        const auditCol = $app.findCollectionByNameOrId('audit_log')
+        const logNeg = new Record(auditCol)
+        logNeg.set('actor_id', auth.id)
+        logNeg.set('actor_email', auth.getString('email'))
+        logNeg.set('action', 'transition_blocked')
+        logNeg.set('project_key', projectKey)
+        logNeg.set('detail', 'transição sem vínculo ao projeto')
+        $app.save(logNeg)
+        return e.forbiddenError('Você não tem vínculo com este projeto.')
+      }
+    }
+
     let p = null
     try {
       p = $app.findFirstRecordByData('projects', 'project_key', projectKey)
