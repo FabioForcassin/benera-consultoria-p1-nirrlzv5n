@@ -805,60 +805,59 @@ export default function PainelProjetos() {
                 </div>
               ) : (
                 <>
-              {carregandoLista ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#0B3556]" />
-                </div>
-              ) : lista.length === 0 ? (
-                <div className="text-center py-12 text-sm text-slate-500">
-                  Nenhum projeto encontrado com os filtros atuais.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {lista.map((p) => (
-                    <button
-                      key={p.project_key}
-                      type="button"
-                      onClick={() => void abrirCartao(p)}
-                      className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-[#0B3556] hover:shadow-md transition-all bg-white"
-                    >
-                      <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <div>
-                          <div className="font-semibold text-[#0B3556] text-sm">
-                            {p.project_key} — {p.name}
+                  {carregandoLista ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-6 h-6 animate-spin text-[#0B3556]" />
+                    </div>
+                  ) : lista.length === 0 ? (
+                    <div className="text-center py-12 text-sm text-slate-500">
+                      Nenhum projeto encontrado com os filtros atuais.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {lista.map((p) => (
+                        <button
+                          key={p.project_key}
+                          type="button"
+                          onClick={() => void abrirCartao(p)}
+                          className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-[#0B3556] hover:shadow-md transition-all bg-white"
+                        >
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div>
+                              <div className="font-semibold text-[#0B3556] text-sm">
+                                {p.project_key} — {p.name}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                Próxima ação: {p.next_action}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
+                                {p.stage}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-xs font-medium ${
+                                  p.priority === 'alta' || p.priority === 'critica'
+                                    ? 'bg-red-100 text-red-700'
+                                    : p.priority === 'media'
+                                      ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {prioridadeLabel(p.priority)}
+                              </span>
+                              {p.atrasado && (
+                                <span className="px-2 py-0.5 rounded-md bg-red-600 text-white text-xs font-semibold">
+                                  Atrasado
+                                </span>
+                              )}
+                              <span className="text-xs text-slate-400">Prazo: {p.due_date}</span>
+                            </div>
                           </div>
-                          <div className="text-xs text-slate-500 mt-1">
-                            Próxima ação: {p.next_action}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
-                            {p.stage}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-xs font-medium ${
-                              p.priority === 'alta' || p.priority === 'critica'
-                                ? 'bg-red-100 text-red-700'
-                                : p.priority === 'media'
-                                  ? 'bg-amber-100 text-amber-700'
-                                  : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {prioridadeLabel(p.priority)}
-                          </span>
-                          {p.atrasado && (
-                            <span className="px-2 py-0.5 rounded-md bg-red-600 text-white text-xs font-semibold">
-                              Atrasado
-                            </span>
-                          )}
-                          <span className="text-xs text-slate-400">Prazo: {p.due_date}</span>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-              )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </>
