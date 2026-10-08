@@ -14,10 +14,16 @@ routerAdd(
     e.bindBody(data)
 
     let novasEtapas = []
-    try {
-      const raw = data.stages
-      novasEtapas = typeof raw === 'string' ? JSON.parse(raw) : raw
-    } catch (_) {
+    const raw = data.stages
+    if (typeof raw === 'string') {
+      try {
+        novasEtapas = JSON.parse(raw)
+      } catch (_) {
+        throw new BadRequestError('Formato inválido da esteira.')
+      }
+    } else if (Array.isArray(raw)) {
+      novasEtapas = raw
+    } else {
       throw new BadRequestError('Formato inválido da esteira.')
     }
     if (!Array.isArray(novasEtapas) || novasEtapas.length === 0) {
@@ -94,9 +100,6 @@ routerAdd(
     // Reescreve pipeline_stages com a nova configuração (estado corrente da esteira)
     const antigos = $app.findRecordsByFilter('pipeline_stages', '', 'ordem', 200, 0)
     for (const a of antigos) $app.delete(a)
-    for (const s of novasEtapas) {
-      const rec = new Record(versionsCol) // placeholder para tipagem — substituído abaixo
-    }
     const stagesCol = $app.findCollectionByNameOrId('pipeline_stages')
     for (const s of novasEtapas) {
       const rec = new Record(stagesCol)
