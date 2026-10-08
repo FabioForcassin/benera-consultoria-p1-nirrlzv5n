@@ -60,9 +60,14 @@ routerAdd(
     } catch (_) {}
     if (stages.length === 0)
       stages.push('Entrada', 'Kick-off', 'Diagnóstico', 'Entrega', 'Encerrado')
-    const priorities = ['baixa', 'media', 'alta']
+    let priosValidas = []
+    try {
+      const prios = $app.findRecordsByFilter('priorities', 'active = true', 'ordem', 100, 0)
+      for (const pr of prios) priosValidas.push(pr.getString('value'))
+    } catch (_) {}
+    if (priosValidas.length === 0) priosValidas = ['baixa', 'media', 'alta']
     if (stages.indexOf(stage) < 0) throw new BadRequestError('Etapa inválida.')
-    if (priorities.indexOf(priority) < 0) throw new BadRequestError('Prioridade inválida.')
+    if (priosValidas.indexOf(priority) < 0) throw new BadRequestError('Prioridade inválida.')
 
     // Validações de relação
     try {

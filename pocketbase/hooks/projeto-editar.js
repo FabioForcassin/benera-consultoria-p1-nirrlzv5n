@@ -50,10 +50,16 @@ routerAdd(
       p.set('owner_id', novoOwner)
     }
 
-    // Prioridade: valida enum
+    // Prioridade: valida contra o catálogo ativo
     const novaPrioridade = (data.priority || '').trim()
     if (novaPrioridade && novaPrioridade !== p.getString('priority')) {
-      if (['baixa', 'media', 'alta'].indexOf(novaPrioridade) < 0) {
+      let priosValidas = []
+      try {
+        const prios = $app.findRecordsByFilter('priorities', 'active = true', 'ordem', 100, 0)
+        for (const pr of prios) priosValidas.push(pr.getString('value'))
+      } catch (_) {}
+      if (priosValidas.length === 0) priosValidas = ['baixa', 'media', 'alta']
+      if (priosValidas.indexOf(novaPrioridade) < 0) {
         throw new BadRequestError('Prioridade inválida.')
       }
       mudancas.push('priority: ' + p.getString('priority') + ' → ' + novaPrioridade)

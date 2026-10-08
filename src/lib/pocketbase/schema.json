@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-08T14:58:51.818Z",
+  "generatedAt": "2026-10-08T19:22:00.785Z",
   "collections": [
     {
       "name": "users",
@@ -29,21 +29,31 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "role",
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["admin", "lider", "consultor", "revisor"]
+          "selectValues": [
+            "admin",
+            "lider",
+            "consultor",
+            "revisor"
+          ]
         }
       ],
       "indexes": [
@@ -73,7 +83,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["admin", "lider", "consultor", "revisor"]
+          "selectValues": [
+            "admin",
+            "lider",
+            "consultor",
+            "revisor"
+          ]
         },
         {
           "name": "token_hash",
@@ -105,14 +120,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -149,7 +169,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["admin", "lider", "consultor", "revisor"]
+          "selectValues": [
+            "admin",
+            "lider",
+            "consultor",
+            "revisor"
+          ]
         },
         {
           "name": "granted_by",
@@ -163,14 +188,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -245,14 +275,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -289,17 +324,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_service_types_name ON service_types (name)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_service_types_name ON service_types (name)"
+      ]
     },
     {
       "name": "clients",
@@ -342,17 +384,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_clients_name ON clients (name)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_clients_name ON clients (name)"
+      ]
     },
     {
       "name": "projects",
@@ -403,14 +452,24 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["Entrada", "Kick-off", "Diagnóstico", "Entrega", "Encerrado"]
+          "selectValues": [
+            "Entrada",
+            "Kick-off",
+            "Diagnóstico",
+            "Entrega",
+            "Encerrado"
+          ]
         },
         {
           "name": "priority",
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["baixa", "media", "alta"]
+          "selectValues": [
+            "baixa",
+            "media",
+            "alta"
+          ]
         },
         {
           "name": "due_date",
@@ -442,14 +501,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "kickoff_date",
@@ -464,7 +528,9 @@
           "system": false
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_projects_key ON projects (project_key)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_projects_key ON projects (project_key)"
+      ]
     },
     {
       "name": "pipeline_stages",
@@ -512,14 +578,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -574,17 +645,83 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_pipeline_version ON pipeline_versions (version)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_pipeline_version ON pipeline_versions (version)"
+      ]
+    },
+    {
+      "name": "priorities",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "value",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ordem",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "active",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_priorities_value ON priorities (value)"
+      ]
     }
   ]
 }
