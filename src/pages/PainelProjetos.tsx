@@ -804,6 +804,7 @@ export default function PainelProjetos() {
                   </div>
                 </div>
               ) : (
+                <>
               {carregandoLista ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-[#0B3556]" />
@@ -857,6 +858,8 @@ export default function PainelProjetos() {
                   ))}
                 </div>
               )}
+              )}
+                </>
               )}
             </>
           )}
