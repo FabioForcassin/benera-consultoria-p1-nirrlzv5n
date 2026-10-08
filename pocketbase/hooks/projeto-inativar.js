@@ -24,7 +24,10 @@ routerAdd(
 
     // Inativação: a linha e a timeline permanecem; só sai da lista de ativos
     p.set('active', false)
-    p.set('stage', 'Encerrado')
+    try {
+      $app.findFirstRecordByData('pipeline_stages', 'name', 'Encerrado')
+      p.set('stage', 'Encerrado')
+    } catch (_) {}
     $app.save(p)
 
     // Auditoria da inativação (CA-1-011)

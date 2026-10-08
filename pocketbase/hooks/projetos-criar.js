@@ -52,7 +52,14 @@ routerAdd(
       throw new BadRequestError('Campos obrigatórios faltando.', errors)
     }
 
-    const stages = ['Entrada', 'Kick-off', 'Diagnóstico', 'Entrega', 'Encerrado']
+    // Etapas válidas = esteira ativa (configurável desde a T1.5)
+    const stages = []
+    try {
+      const ativas = $app.findRecordsByFilter('pipeline_stages', 'active = true', 'ordem', 100, 0)
+      for (const s of ativas) stages.push(s.getString('name'))
+    } catch (_) {}
+    if (stages.length === 0)
+      stages.push('Entrada', 'Kick-off', 'Diagnóstico', 'Entrega', 'Encerrado')
     const priorities = ['baixa', 'media', 'alta']
     if (stages.indexOf(stage) < 0) throw new BadRequestError('Etapa inválida.')
     if (priorities.indexOf(priority) < 0) throw new BadRequestError('Prioridade inválida.')

@@ -72,10 +72,17 @@ routerAdd(
       p.set('due_date', novoPrazo.replace('T', ' ').replace('Z', ''))
     }
 
-    // Etapa: valida enum (transições detalhadas ficam na SPEC-1-003/T1.5-T1.6)
+    // Etapa: valida contra a esteira ativa (configurável desde a T1.5)
     const novaEtapa = (data.stage || '').trim()
     if (novaEtapa && novaEtapa !== p.getString('stage')) {
-      if (['Entrada', 'Kick-off', 'Diagnóstico', 'Entrega', 'Encerrado'].indexOf(novaEtapa) < 0) {
+      let etapasValidas = []
+      try {
+        const ativas = $app.findRecordsByFilter('pipeline_stages', 'active = true', 'ordem', 100, 0)
+        for (const s of ativas) etapasValidas.push(s.getString('name'))
+      } catch (_) {}
+      if (etapasValidas.length === 0)
+        etapasValidas = ['Entrada', 'Kick-off', 'Diagnóstico', 'Entrega', 'Encerrado']
+      if (etapasValidas.indexOf(novaEtapa) < 0) {
         throw new BadRequestError('Etapa inválida.')
       }
       mudancas.push('stage: ' + p.getString('stage') + ' → ' + novaEtapa)
