@@ -16,6 +16,7 @@ import {
   ArrowRight,
   Ban,
   History,
+  FolderKanban,
 } from 'lucide-react'
 import { useAuth, translateAuthError, type Papel } from '@/contexts/AuthContext'
 import { BeneraLogo } from '@/components/BeneraLogo'
@@ -175,6 +176,11 @@ export default function PainelProjetos() {
   const [prioItens, setPrioItens] = useState<{ name: string; value: string; ordem: number }[]>([])
   const [prioMsg, setPrioMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  // Kanban (T1.6): quadro por etapa + transição pela tela (mover para a coluna vizinha)
+  const [visaoKanban, setVisaoKanban] = useState(true)
+  const [kanbanMsg, setKanbanMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [kickoffKanban, setKickoffKanban] = useState<Record<string, string>>({})
+
   // Carrega a carteira automaticamente ao abrir a página (lista já aparece; filtro é opcional)
   useEffect(() => {
     void carregarCarteira()
@@ -237,6 +243,23 @@ export default function PainelProjetos() {
       setPrioItens(prios.map((p, i) => ({ name: p.name, value: p.value, ordem: i + 1 })))
     } catch {
       setEsteiraMsg({ ok: false, text: 'Não foi possível carregar a esteira.' })
+    }
+  }
+
+  const moverNoKanban = async (p: Projeto, destino: string) => {
+    setKanbanMsg(null)
+    try {
+      const body: Record<string, string> = { destino }
+      const ko = kickoffKanban[p.project_key]
+      if (ko) body.kickoff_date = ko
+      await pb.send('/backend/v1/projects/' + p.project_key + '/transicao', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+      setKanbanMsg({ ok: true, text: `${p.project_key} movido para "${destino}".` })
+      await carregarCarteira(true)
+    } catch (err) {
+      setKanbanMsg({ ok: false, text: translateAuthError(err) })
     }
   }
 
@@ -643,7 +666,25 @@ export default function PainelProjetos() {
                 </Button>
               </div>
 
-              <div className="flex gap-2 mb-6">
+              <div className="flex gap-2 mb-6 flex-wrap">
+                <Button
+                  variant={visaoKanban ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setVisaoKanban(true)}
+                  className="gap-2"
+                >
+                  <FolderKanban className="w-3.5 h-3.5" />
+                  Kanban
+                </Button>
+                <Button
+                  variant={!visaoKanban ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setVisaoKanban(false)}
+                  className="gap-2"
+                >
+                  <ListFilter className="w-3.5 h-3.5" />
+                  Lista
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -668,6 +709,101 @@ export default function PainelProjetos() {
                 </Button>
               </div>
 
+              {kanbanMsg && (
+                <div
+                  className={`mb-4 p-3 rounded-lg flex items-start gap-3 text-sm ${
+                    kanbanMsg.ok
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                      : 'bg-red-50 border border-red-200 text-red-700'
+                  }`}
+                >
+                  {kanbanMsg.ok ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  )}
+                  <div className="leading-snug">{kanbanMsg.text}</div>
+                </div>
+              )}
+
+              {visaoKanban ? (
+                /* Kanban: colunas por etapa da esteira ativa, com botão de avançar */
+                <div className="overflow-x-auto pb-4">
+                  <div className="flex gap-4 min-w-max">
+                    {etapasEsteira.map((etapaCol) => {
+                      const naEtapa = lista.filter((p) => p.stage === etapaCol.name)
+                      return (
+                        <div key={etapaCol.id} className="w-64 shrink-0">
+                          <div className="flex items-center justify-between mb-2 px-1">
+                            <span className="text-xs font-bold uppercase tracking-wider text-[#0B3556]">
+                              {etapaCol.name}
+                            </span>
+                            <span className="text-xs text-slate-400">{naEtapa.length}</span>
+                          </div>
+                          <div className="space-y-2 bg-slate-50 rounded-xl p-2 min-h-[120px] border border-slate-100">
+                            {naEtapa.map((p) => {
+                              const idxCol = etapasEsteira.findIndex((e) => e.name === p.stage)
+                              const proxima = etapasEsteira[idxCol + 1]
+                              return (
+                                <div
+                                  key={p.project_key}
+                                  className="p-3 rounded-lg bg-white border border-slate-200 shadow-xs"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => void abrirCartao(p)}
+                                    className="w-full text-left"
+                                  >
+                                    <div className="text-xs font-semibold text-[#0B3556]">
+                                      {p.project_key}
+                                    </div>
+                                    <div className="text-xs text-slate-600 mt-0.5">{p.name}</div>
+                                    <div className="text-[10px] text-slate-400 mt-1">
+                                      Prazo: {p.due_date}
+                                      {p.atrasado ? ' · ATRASADO' : ''}
+                                    </div>
+                                  </button>
+                                  {proxima && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="mt-2 h-7 w-full text-[11px] gap-1"
+                                        onClick={() => void moverNoKanban(p, proxima.name)}
+                                      >
+                                        <ArrowRight className="w-3 h-3" />
+                                        Avançar p/ {proxima.name}
+                                      </Button>
+                                      {proxima.entry_requires.includes('kickoff_date') && (
+                                        <Input
+                                          type="date"
+                                          value={kickoffKanban[p.project_key] || ''}
+                                          onChange={(e) =>
+                                            setKickoffKanban({
+                                              ...kickoffKanban,
+                                              [p.project_key]: e.target.value,
+                                            })
+                                          }
+                                          className="mt-1 h-7 text-[11px]"
+                                        />
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            {naEtapa.length === 0 && (
+                              <div className="text-[10px] text-slate-300 text-center pt-8">
+                                vazio
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
               {carregandoLista ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-[#0B3556]" />
@@ -720,6 +856,7 @@ export default function PainelProjetos() {
                     </button>
                   ))}
                 </div>
+              )}
               )}
             </>
           )}
