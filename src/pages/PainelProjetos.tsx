@@ -1419,8 +1419,8 @@ export default function PainelProjetos() {
                 </div>
               )}
 
-              {/* Mover etapa (admin/líder) — motor da T1.5 pela tela */}
-              {podeCadastrar && cartao.active && (
+              {/* Mover etapa (admin/líder/consultor com vínculo — v0.0.24) — motor da T1.5 pela tela */}
+              {cartao.active && (
                 <div className="p-4 rounded-xl border border-slate-200 space-y-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                     Mover etapa
