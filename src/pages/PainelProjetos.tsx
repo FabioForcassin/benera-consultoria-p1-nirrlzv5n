@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
 
-const VERSAO_BUILD = 'v0.0.34'
+const VERSAO_BUILD = 'v0.0.35'
 
 interface Cliente {
   id: string
@@ -84,6 +84,26 @@ interface EventoTimeline {
   action: string
   detail: string
   created: string
+}
+interface Tarefa {
+  id: string
+  titulo: string
+  descricao: string
+  assignee_id: string
+  due_date: string
+  status: string
+  evidencia_esperada: string
+  atrasada: boolean
+  itens: TarefaItem[]
+  pendentes_obrigatorios: number
+  created: string
+}
+interface TarefaItem {
+  id: string
+  titulo: string
+  obrigatorio: boolean
+  concluido: boolean
+  ordem: number
 }
 interface Etapa {
   id: string
@@ -174,6 +194,18 @@ export default function PainelProjetos() {
   const [visaoKanban, setVisaoKanban] = useState(true)
   const [kanbanMsg, setKanbanMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [kickoffKanban, setKickoffKanban] = useState<Record<string, string>>({})
+
+  // Tarefas (T1.7) — seção no cartão 360
+  const [tarefas, setTarefas] = useState<Tarefa[]>([])
+  const [novaTarefaAberta, setNovaTarefaAberta] = useState(false)
+  const [tTitulo, setTTitulo] = useState('')
+  const [tDescricao, setTDescricao] = useState('')
+  const [tAssignee, setTAssignee] = useState('')
+  const [tPrazo, setTPrazo] = useState('')
+  const [tEvidencia, setTEvidencia] = useState('')
+  const [tItens, setTItens] = useState('')
+  const [tMsg, setTMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [tCarregando, setTCarregando] = useState(false)
 
   // Carrega tudo no mount (etapas/prioridades para TODOS os papéis) + auto-refresh 30s
   useEffect(() => {
@@ -307,6 +339,9 @@ export default function PainelProjetos() {
     setEditMsg(null)
     setTransicaoDestino('')
     setKickoffInput('')
+    setTarefas([])
+    setTMsg(null)
+    setNovaTarefaAberta(false)
     if (etapasEsteira.length === 0) {
       void carregarEtapas()
     }
@@ -340,6 +375,116 @@ export default function PainelProjetos() {
     } catch {
       setCartao(null)
       setEditMsg({ ok: false, text: 'Não foi possível abrir o cartão do projeto.' })
+    }
+    // Tarefas do projeto (T1.7): carregamento SEPARADO dos demais endpoints —
+    // um 403 aqui não pode derrubar o cartão (lição Promise.all T1.6).
+    try {
+      const tr = await pb.send('/backend/v1/projects/' + p.project_key + '/tasks', {
+        method: 'GET',
+      })
+      setTarefas((tr as { items: Tarefa[] }).items)
+    } catch {
+      setTarefas([])
+    }
+  }
+
+  const carregarTarefas = async (key: string) => {
+    try {
+      const tr = await pb.send('/backend/v1/projects/' + key + '/tasks', { method: 'GET' })
+      setTarefas((tr as { items: Tarefa[] }).items)
+    } catch {
+      setTarefas([])
+    }
+  }
+
+  const criarTarefa = async () => {
+    if (!cartao) return
+    setTMsg(null)
+    setTCarregando(true)
+    try {
+      const itens = tItens
+        .split('\n')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+        .map((s, i) => ({
+          titulo: s.startsWith('*') ? s.slice(1).trim() : s,
+          obrigatorio: s.startsWith('*'),
+          ordem: i + 1,
+        }))
+      await pb.send('/backend/v1/projects/' + cartao.project_key + '/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          titulo: tTitulo,
+          descricao: tDescricao,
+          assignee_id: tAssignee,
+          due_date: tPrazo,
+          evidencia_esperada: tEvidencia,
+          itens: JSON.stringify(itens),
+        }),
+      })
+      setTMsg({ ok: true, text: 'Tarefa criada e registrada na auditoria.' })
+      setTTitulo('')
+      setTDescricao('')
+      setTAssignee('')
+      setTPrazo('')
+      setTEvidencia('')
+      setTItens('')
+      setNovaTarefaAberta(false)
+      await carregarTarefas(cartao.project_key)
+    } catch (err) {
+      setTMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setTCarregando(false)
+    }
+  }
+
+  const marcarItem = async (tarefa: Tarefa, item: TarefaItem, concluido: boolean) => {
+    if (!cartao) return
+    setTMsg(null)
+    try {
+      await pb.send('/backend/v1/tasks/' + tarefa.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ itens: JSON.stringify([{ id: item.id, concluido }]) }),
+      })
+      await carregarTarefas(cartao.project_key)
+    } catch (err) {
+      setTMsg({ ok: false, text: translateAuthError(err) })
+    }
+  }
+
+  const concluirTarefa = async (tarefa: Tarefa) => {
+    if (!cartao) return
+    setTMsg(null)
+    setTCarregando(true)
+    try {
+      await pb.send('/backend/v1/tasks/' + tarefa.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'concluida' }),
+      })
+      setTMsg({ ok: true, text: 'Tarefa concluída e registrada na auditoria.' })
+      await carregarTarefas(cartao.project_key)
+    } catch (err) {
+      setTMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setTCarregando(false)
+    }
+  }
+
+  const reabrirTarefa = async (tarefa: Tarefa) => {
+    if (!cartao) return
+    setTMsg(null)
+    setTCarregando(true)
+    try {
+      await pb.send('/backend/v1/tasks/' + tarefa.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'pendente' }),
+      })
+      setTMsg({ ok: true, text: 'Tarefa reaberta (voltou para pendente).' })
+      await carregarTarefas(cartao.project_key)
+    } catch (err) {
+      setTMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setTCarregando(false)
     }
   }
 
@@ -1711,6 +1856,194 @@ export default function PainelProjetos() {
                   </div>
                 </div>
               )}
+
+              {/* Tarefas (T1.7) */}
+              <div className="p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                    Tarefas ({tarefas.length})
+                  </div>
+                  <Button
+                    onClick={() => setNovaTarefaAberta(!novaTarefaAberta)}
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs h-7"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                    {novaTarefaAberta ? 'Cancelar' : 'Nova tarefa'}
+                  </Button>
+                </div>
+
+                {novaTarefaAberta && (
+                  <div className="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label className="text-xs text-slate-600">Título *</Label>
+                        <Input
+                          value={tTitulo}
+                          onChange={(e) => setTTitulo(e.target.value)}
+                          placeholder="Ex.: Consolidar contexto"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label className="text-xs text-slate-600">Descrição</Label>
+                        <Input
+                          value={tDescricao}
+                          onChange={(e) => setTDescricao(e.target.value)}
+                          placeholder="Detalhe opcional"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-600">Responsável *</Label>
+                        <Select value={tAssignee} onValueChange={setTAssignee}>
+                          <SelectTrigger className="w-full h-9 text-sm">
+                            <SelectValue placeholder="Quem executa" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {usuarios.map((u) => (
+                              <SelectItem key={u.id} value={u.id}>
+                                {u.name || u.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-600">Prazo *</Label>
+                        <Input
+                          type="date"
+                          value={tPrazo}
+                          onChange={(e) => setTPrazo(e.target.value)}
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label className="text-xs text-slate-600">Evidência esperada *</Label>
+                        <Input
+                          value={tEvidencia}
+                          onChange={(e) => setTEvidencia(e.target.value)}
+                          placeholder="Ex.: planilha consolidada revisada"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5 md:col-span-2">
+                        <Label className="text-xs text-slate-600">
+                          Checklist (1 item por linha — linhas com * são obrigatórias)
+                        </Label>
+                        <textarea
+                          value={tItens}
+                          onChange={(e) => setTItens(e.target.value)}
+                          rows={3}
+                          placeholder={'Coletar base\n*Validar com o cliente'}
+                          className="w-full text-sm rounded-md border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => void criarTarefa()}
+                      disabled={tCarregando}
+                      className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                    >
+                      {tCarregando ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
+                      Criar tarefa
+                    </Button>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {tarefas.map((t) => (
+                    <div key={t.id} className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-[#0B3556] flex items-center gap-2 flex-wrap">
+                            {t.titulo}
+                            {t.status === 'concluida' ? (
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-medium">
+                                concluída
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">
+                                pendente
+                              </span>
+                            )}
+                            {t.atrasada && (
+                              <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium">
+                                atrasada
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            {t.evidencia_esperada && <>Evidência: {t.evidencia_esperada} · </>}
+                            Prazo: {t.due_date}
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          {t.status !== 'concluida' ? (
+                            <Button
+                              onClick={() => void concluirTarefa(t)}
+                              disabled={tCarregando}
+                              size="sm"
+                              className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Concluir
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => void reabrirTarefa(t)}
+                              disabled={tCarregando}
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7"
+                            >
+                              Reabrir
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      {t.itens.length > 0 && (
+                        <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                          {t.itens.map((it) => (
+                            <label
+                              key={it.id}
+                              className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={it.concluido}
+                                onChange={(e) => void marcarItem(t, it, e.target.checked)}
+                                className="w-3.5 h-3.5"
+                              />
+                              <span className={it.concluido ? 'line-through text-slate-400' : ''}>
+                                {it.titulo}
+                              </span>
+                              {it.obrigatorio && (
+                                <span className="text-[10px] text-slate-400">(obrigatório)</span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {tarefas.length === 0 && !novaTarefaAberta && (
+                    <div className="text-xs text-slate-400">
+                      Nenhuma tarefa. Use "Nova tarefa" para criar a primeira.
+                    </div>
+                  )}
+                </div>
+                {tMsg && (
+                  <div className={`mt-2 text-xs ${tMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {tMsg.text}
+                  </div>
+                )}
+              </div>
 
               {/* Timeline (auditoria) */}
               <div className="p-4 rounded-xl border border-slate-200">
