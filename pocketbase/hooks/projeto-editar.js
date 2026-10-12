@@ -34,7 +34,7 @@ routerAdd(
       p.set(campo, valor)
     }
 
-    // Responsável: valida existência e estado ativo
+    // Responsável: valida existência e estado ativo + GARANTE vínculo de visualização/movimentação
     const novoOwner = (data.owner_id || '').trim()
     if (novoOwner && novoOwner !== p.getString('owner_id')) {
       let owner = null
@@ -48,6 +48,32 @@ routerAdd(
       }
       mudancas.push('owner_id: ' + p.getString('owner_id') + ' → ' + novoOwner)
       p.set('owner_id', novoOwner)
+
+      // Vínculo automático: o responsável sempre enxerga e movimenta o projeto (papel do vínculo
+      // preservado se já existir; senão, herda o papel global do usuário)
+      const papelGlobal = owner.getString('role')
+      const papelVinculo =
+        ['admin', 'lider', 'consultor', 'revisor'].indexOf(papelGlobal) >= 0
+          ? papelGlobal
+          : 'consultor'
+      const existentes = $app.findRecordsByFilter(
+        'project_members',
+        'user_id = {:uid} && project_key = {:pk}',
+        '-created',
+        1,
+        0,
+        { uid: novoOwner, pk: projectKey },
+      )
+      if (existentes.length === 0) {
+        const membersCol = $app.findCollectionByNameOrId('project_members')
+        const novoVinculo = new Record(membersCol)
+        novoVinculo.set('user_id', novoOwner)
+        novoVinculo.set('project_key', projectKey)
+        novoVinculo.set('project_role', papelVinculo)
+        novoVinculo.set('granted_by', auth.id)
+        $app.save(novoVinculo)
+        mudancas.push('vínculo criado p/ responsável (' + papelVinculo + ')')
+      }
     }
 
     // Prioridade: valida contra o catálogo ativo

@@ -122,6 +122,30 @@ routerAdd(
     member.set('granted_by', auth.id)
     $app.save(member)
 
+    // Vínculo automático do responsável informado (se diferente do criador): ele enxerga e
+    // movimenta o projeto desde a criação — sem depender de segunda alocação
+    if (ownerId !== auth.id) {
+      let ownerRec = null
+      try {
+        ownerRec = $app.findRecordById('_pb_users_auth_', ownerId)
+      } catch (_) {
+        ownerRec = null
+      }
+      if (ownerRec) {
+        const papelGlobal = ownerRec.getString('role')
+        const papelVinculo =
+          ['admin', 'lider', 'consultor', 'revisor'].indexOf(papelGlobal) >= 0
+            ? papelGlobal
+            : 'consultor'
+        const vinculoOwner = new Record(membersCol)
+        vinculoOwner.set('user_id', ownerId)
+        vinculoOwner.set('project_key', projectKey)
+        vinculoOwner.set('project_role', papelVinculo)
+        vinculoOwner.set('granted_by', auth.id)
+        $app.save(vinculoOwner)
+      }
+    }
+
     // Auditoria
     const audit = $app.findCollectionByNameOrId('audit_log')
     const log = new Record(audit)
