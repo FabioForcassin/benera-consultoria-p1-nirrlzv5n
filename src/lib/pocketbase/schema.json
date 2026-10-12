@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-12T23:48:12.441Z",
+  "generatedAt": "2026-10-12T23:49:20.490Z",
   "collections": [
     {
       "name": "users",
@@ -828,13 +828,13 @@
         {
           "name": "obrigatorio",
           "type": "bool",
-          "required": true,
+          "required": false,
           "system": false
         },
         {
           "name": "concluido",
           "type": "bool",
-          "required": true,
+          "required": false,
           "system": false
         },
         {
