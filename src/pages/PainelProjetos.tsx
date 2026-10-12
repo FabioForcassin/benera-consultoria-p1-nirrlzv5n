@@ -1902,11 +1902,14 @@ export default function PainelProjetos() {
                             <SelectValue placeholder="Quem executa" />
                           </SelectTrigger>
                           <SelectContent>
-                            {usuarios.map((u) => (
-                              <SelectItem key={u.id} value={u.id}>
-                                {u.name || u.email}
-                              </SelectItem>
-                            ))}
+                            {usuarios
+                              .filter((u) => u.role !== 'revisor')
+                              .map((u) => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  {u.name || u.email}
+                                  {u.role === 'consultor' ? ' (consultor)' : ''}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
