@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
 
-const VERSAO_BUILD = 'v0.0.32'
+const VERSAO_BUILD = 'v0.0.34'
 
 interface Cliente {
   id: string
@@ -213,6 +213,8 @@ export default function PainelProjetos() {
       if (fPrioridade && fPrioridade !== 'todas') params.set('prioridade', fPrioridade)
       if (fAtraso) params.set('atraso', '1')
       if (fOwner && fOwner !== 'todos') params.set('owner', fOwner)
+      // Kanban inclui encerrados: card movido para a última coluna NÃO pode sumir do quadro
+      params.set('encerrados', '1')
       const r = await pb.send(
         '/backend/v1/projects' + (params.toString() ? '?' + params.toString() : ''),
         { method: 'GET' },

@@ -1,6 +1,5 @@
-// T1.4 — Listagem da carteira com filtros e escopo por papel (CA-1-009).
-// Admin/líder: carteira toda. Consultor/revisor: só projetos com vínculo.
-// Query params via e.request.url.query() (API Go do runtime). "Agora" via string ISO em JS.
+// T1.6-fix — Coluna "Encerrado" também mostra projetos inativos (o card não pode sumir do quadro).
+// A listagem padrão filtra active=true; o Kanban precisa ver os encerrados para o card não desaparecer.
 routerAdd(
   'GET',
   '/backend/v1/projects',
@@ -12,14 +11,16 @@ routerAdd(
     const papel = auth.getString('role')
     const escopoTotal = papel === 'admin' || papel === 'lider'
 
-    // Filtros de query (opcionais): etapa, responsável, prioridade, atraso
+    // Filtros de query (opcionais): etapa, responsável, prioridade, atraso, incluir_encerrados
     const q = e.request.url.query()
     const filtroEtapa = (q.get('etapa') || '').trim()
     const filtroOwner = (q.get('owner') || '').trim()
     const filtroPrioridade = (q.get('prioridade') || '').trim()
     const filtroAtraso = (q.get('atraso') || '').trim() // "1" = só atrasados
+    const incluirEncerrados = (q.get('encerrados') || '').trim() === '1'
 
-    const filtros = ['active = true']
+    const filtros = []
+    if (!incluirEncerrados) filtros.push('active = true')
     const params = {}
     if (filtroEtapa) {
       filtros.push('stage = {:etapa}')
@@ -34,7 +35,7 @@ routerAdd(
       params.prio = filtroPrioridade
     }
 
-    // Agora em formato PB ("2006-01-02 15:04:05.000Z") — comparação lexicográfica segura
+    // Agora em formato PB — comparação lexicográfica segura
     const agoraStr = new Date().toISOString().replace('T', ' ').slice(0, 19) + '.000Z'
 
     // Escopo por vínculo (consultor/revisor)
@@ -57,7 +58,7 @@ routerAdd(
 
     const registros = $app.findRecordsByFilter(
       'projects',
-      filtros.join(' && '),
+      filtros.length > 0 ? filtros.join(' && ') : '',
       '-updated',
       200,
       0,
@@ -78,6 +79,7 @@ routerAdd(
         due_date: dueStr.slice(0, 10),
         next_action: p.getString('next_action'),
         owner_id: p.getString('owner_id'),
+        active: p.getBool('active'),
         atrasado: atrasado,
       })
     }
