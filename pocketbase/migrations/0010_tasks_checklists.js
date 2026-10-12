@@ -1,6 +1,8 @@
 // T1.7 — Coleções de tarefas e itens de checklist (CA-1-019/020).
 // Padrão T1.2: regras NULAS (acesso só via hooks server-side); status como TEXT
 // com validação no hook (lição da 0009: SelectField novo não é editável no jsvm).
+// task_items → tasks: relação resolvida APÓS salvar tasks (guardrail: coleção criada
+// na mesma migração não resolve collectionId por nome).
 migrate(
   (app) => {
     // 1) tasks: unidade de trabalho vinculada ao projeto, com responsável, prazo,
@@ -52,6 +54,8 @@ migrate(
     app.save(tasks)
 
     // 2) task_items: itens do checklist; obrigatorio=true trava a conclusão da tarefa.
+    //    Relação para tasks resolvida pelo id real (coleção acabou de ser criada acima).
+    const tasksId = app.findCollectionByNameOrId('tasks').id
     const items = new Collection({
       name: 'task_items',
       type: 'base',
@@ -64,7 +68,7 @@ migrate(
         {
           name: 'task_id',
           type: 'relation',
-          collectionId: 'tasks',
+          collectionId: tasksId,
           required: true,
           maxSelect: 1,
           cascadeDelete: true,
