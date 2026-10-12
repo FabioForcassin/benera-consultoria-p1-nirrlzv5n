@@ -39,6 +39,8 @@ import {
 } from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
 
+const VERSAO_BUILD = 'v0.0.31'
+
 interface Cliente {
   id: string
   name: string
@@ -102,13 +104,6 @@ interface Prioridade {
   value: string
 }
 
-const PAPEIS_PROJETO: Record<string, string> = {
-  admin: 'Administrador',
-  lider: 'Líder',
-  consultor: 'Consultor',
-  revisor: 'Revisor',
-}
-
 export default function PainelProjetos() {
   const { isAdmin, isLider, user } = useAuth()
   const podeCadastrar = isAdmin || isLider
@@ -119,9 +114,8 @@ export default function PainelProjetos() {
     'carteira',
   )
 
-  // Carteira (listagem + filtros) — carrega automaticamente
+  // Carteira (listagem + filtros) — carrega automaticamente e atualiza a cada 30s
   const [lista, setLista] = useState<Projeto[]>([])
-  const [listaCarregada, setListaCarregada] = useState(false)
   const [fEtapa, setFEtapa] = useState('')
   const [fPrioridade, setFPrioridade] = useState('')
   const [fAtraso, setFAtraso] = useState(false)
@@ -176,20 +170,23 @@ export default function PainelProjetos() {
   const [prioItens, setPrioItens] = useState<{ name: string; value: string; ordem: number }[]>([])
   const [prioMsg, setPrioMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
-  // Kanban (T1.6): quadro por etapa + transição pela tela (mover para a coluna vizinha)
+  // Kanban (T1.6)
   const [visaoKanban, setVisaoKanban] = useState(true)
   const [kanbanMsg, setKanbanMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [kickoffKanban, setKickoffKanban] = useState<Record<string, string>>({})
 
-  // Carrega a carteira automaticamente ao abrir a página (lista já aparece; filtro é opcional)
+  // Carrega tudo no mount (etapas/prioridades para TODOS os papéis) + auto-refresh 30s
   useEffect(() => {
     void carregarCarteira()
     void carregarCatalogos()
     void carregarEsteira()
+    const t = setInterval(() => {
+      void carregarCarteira(true)
+    }, 30000)
+    return () => clearInterval(t)
   }, [])
 
   const carregarCatalogos = async () => {
-    if (clientes.length > 0) return
     try {
       const [c, s, u, p, pr] = await Promise.all([
         pb.send('/backend/v1/clients', { method: 'GET' }),
@@ -209,7 +206,6 @@ export default function PainelProjetos() {
   }
 
   const carregarCarteira = async (forcar = false) => {
-    if (listaCarregada && !forcar && !fEtapa && !fPrioridade && !fAtraso && !fOwner) return
     setCarregandoLista(true)
     try {
       const params = new URLSearchParams()
@@ -222,7 +218,6 @@ export default function PainelProjetos() {
         { method: 'GET' },
       )
       setLista((r as { items: Projeto[] }).items)
-      setListaCarregada(true)
     } catch {
       setLista([])
     } finally {
@@ -244,23 +239,6 @@ export default function PainelProjetos() {
       setPrioItens(prios.map((p, i) => ({ name: p.name, value: p.value, ordem: i + 1 })))
     } catch {
       setEsteiraMsg({ ok: false, text: 'Não foi possível carregar a esteira.' })
-    }
-  }
-
-  const moverNoKanban = async (p: Projeto, destino: string) => {
-    setKanbanMsg(null)
-    try {
-      const body: Record<string, string> = { destino }
-      const ko = kickoffKanban[p.project_key]
-      if (ko) body.kickoff_date = ko
-      await pb.send('/backend/v1/projects/' + p.project_key + '/transicao', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      })
-      setKanbanMsg({ ok: true, text: `${p.project_key} movido para "${destino}".` })
-      await carregarCarteira(true)
-    } catch (err) {
-      setKanbanMsg({ ok: false, text: translateAuthError(err) })
     }
   }
 
@@ -315,8 +293,6 @@ export default function PainelProjetos() {
     setEditMsg(null)
     setTransicaoDestino('')
     setKickoffInput('')
-    // Etapas da esteira precisam estar carregadas para o dropdown "Destino" (o admin pode
-    // nunca ter aberto a aba Esteira nesta sessão)
     if (etapasEsteira.length === 0) {
       void carregarEsteira()
     }
@@ -427,6 +403,23 @@ export default function PainelProjetos() {
     }
   }
 
+  const moverNoKanban = async (p: Projeto, destino: string) => {
+    setKanbanMsg(null)
+    try {
+      const body: Record<string, string> = { destino }
+      const ko = kickoffKanban[p.project_key]
+      if (ko) body.kickoff_date = ko
+      await pb.send('/backend/v1/projects/' + p.project_key + '/transicao', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+      setKanbanMsg({ ok: true, text: `${p.project_key} movido para "${destino}".` })
+      await carregarCarteira(true)
+    } catch (err) {
+      setKanbanMsg({ ok: false, text: translateAuthError(err) })
+    }
+  }
+
   if (!podeVerCarteira) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
@@ -460,7 +453,7 @@ export default function PainelProjetos() {
       setClienteMsg({ ok: true, text: `Cliente "${clienteNome.trim()}" cadastrado com sucesso.` })
       setClienteNome('')
       setClienteDoc('')
-      setClientes([])
+      await carregarCatalogos()
     } catch (err) {
       setClienteMsg({ ok: false, text: translateAuthError(err) })
     } finally {
@@ -471,7 +464,7 @@ export default function PainelProjetos() {
   const criarProjeto = async (e: FormEvent) => {
     e.preventDefault()
     setProjMsg(null)
-    await carregarCatalogos()
+    if (etapasEsteira.length === 0) await carregarEsteira()
 
     const faltando: string[] = []
     if (!projKey.trim()) faltando.push('Chave do projeto')
@@ -506,7 +499,7 @@ export default function PainelProjetos() {
       })
       setProjMsg({
         ok: true,
-        text: `Projeto "${projNome.trim()}" criado com sucesso! Você é o admin do projeto.`,
+        text: `Projeto "${projNome.trim()}" criado com sucesso! Você é o admin do projeto. Ele já aparece na Carteira.`,
       })
       setProjKey('')
       setProjNome('')
@@ -517,8 +510,8 @@ export default function PainelProjetos() {
       setPrioridade('')
       setPrazo('')
       setProximaAcao('')
-      setProjetos([])
-      setListaCarregada(false)
+      await carregarCatalogos()
+      await carregarCarteira(true)
     } catch (err) {
       setProjMsg({ ok: false, text: translateAuthError(err) })
     } finally {
@@ -545,7 +538,7 @@ export default function PainelProjetos() {
       })
       setMembroMsg({
         ok: true,
-        text: `Vínculo concedido: ${usuarios.find((u) => u.id === membroUserId)?.email ?? 'usuário'} como ${membroRole} no projeto ${membroProjKey}.`,
+        text: `Vínculo concedido: ${usuarios.find((u) => u.id === membroUserId)?.email ?? 'usuário'} como ${membroRole} no projeto ${membroProjKey}. O projeto já aparece na carteira dele.`,
       })
       setMembroUserId('')
       setMembroProjKey('')
@@ -562,7 +555,7 @@ export default function PainelProjetos() {
       type="button"
       onClick={() => {
         setAba(id)
-        if (id === 'carteira') void carregarCarteira()
+        if (id === 'carteira') void carregarCarteira(true)
         if (id === 'esteira') void carregarEsteira()
         if (id === 'projeto' || id === 'membros') void carregarCatalogos()
       }}
@@ -588,13 +581,16 @@ export default function PainelProjetos() {
         <Link to="/dashboard" className="inline-block">
           <BeneraLogo variant="dark" size="md" />
         </Link>
-        <Link
-          to="/dashboard"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#0B3556] transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Voltar ao painel
-        </Link>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-mono text-slate-300">{VERSAO_BUILD}</span>
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#0B3556] transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Voltar ao painel
+          </Link>
+        </div>
       </div>
 
       <div className="w-full max-w-[900px] my-auto py-8">
@@ -613,8 +609,9 @@ export default function PainelProjetos() {
                 Carteira de projetos
               </h1>
               <p className="text-sm text-[#4B5563] mb-6">
-                Clique em um projeto para abrir o cartão 360. Filtre se quiser — a lista já vem
-                completa.
+                {podeCadastrar
+                  ? 'Clique em um projeto para abrir o cartão 360. Filtre se quiser — a lista já vem completa.'
+                  : 'Seus projetos alocados. Clique para abrir o cartão e avançar etapas.'}
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
@@ -727,7 +724,11 @@ export default function PainelProjetos() {
                 </div>
               )}
 
-              {visaoKanban ? (
+              {carregandoLista && lista.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#0B3556]" />
+                </div>
+              ) : visaoKanban ? (
                 /* Kanban: colunas por etapa da esteira ativa, com botão de avançar */
                 <div className="overflow-x-auto pb-4">
                   <div className="flex gap-4 min-w-max">
@@ -804,62 +805,54 @@ export default function PainelProjetos() {
                     })}
                   </div>
                 </div>
+              ) : lista.length === 0 ? (
+                <div className="text-center py-12 text-sm text-slate-500">
+                  Nenhum projeto encontrado com os filtros atuais.
+                </div>
               ) : (
-                <>
-                  {carregandoLista ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="w-6 h-6 animate-spin text-[#0B3556]" />
-                    </div>
-                  ) : lista.length === 0 ? (
-                    <div className="text-center py-12 text-sm text-slate-500">
-                      Nenhum projeto encontrado com os filtros atuais.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {lista.map((p) => (
-                        <button
-                          key={p.project_key}
-                          type="button"
-                          onClick={() => void abrirCartao(p)}
-                          className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-[#0B3556] hover:shadow-md transition-all bg-white"
-                        >
-                          <div className="flex items-center justify-between gap-3 flex-wrap">
-                            <div>
-                              <div className="font-semibold text-[#0B3556] text-sm">
-                                {p.project_key} — {p.name}
-                              </div>
-                              <div className="text-xs text-slate-500 mt-1">
-                                Próxima ação: {p.next_action}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
-                                {p.stage}
-                              </span>
-                              <span
-                                className={`px-2 py-0.5 rounded-md text-xs font-medium ${
-                                  p.priority === 'alta' || p.priority === 'critica'
-                                    ? 'bg-red-100 text-red-700'
-                                    : p.priority === 'media'
-                                      ? 'bg-amber-100 text-amber-700'
-                                      : 'bg-slate-100 text-slate-600'
-                                }`}
-                              >
-                                {prioridadeLabel(p.priority)}
-                              </span>
-                              {p.atrasado && (
-                                <span className="px-2 py-0.5 rounded-md bg-red-600 text-white text-xs font-semibold">
-                                  Atrasado
-                                </span>
-                              )}
-                              <span className="text-xs text-slate-400">Prazo: {p.due_date}</span>
-                            </div>
+                <div className="space-y-3">
+                  {lista.map((p) => (
+                    <button
+                      key={p.project_key}
+                      type="button"
+                      onClick={() => void abrirCartao(p)}
+                      className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-[#0B3556] hover:shadow-md transition-all bg-white"
+                    >
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <div className="font-semibold text-[#0B3556] text-sm">
+                            {p.project_key} — {p.name}
                           </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
+                          <div className="text-xs text-slate-500 mt-1">
+                            Próxima ação: {p.next_action}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
+                            {p.stage}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-xs font-medium ${
+                              p.priority === 'alta' || p.priority === 'critica'
+                                ? 'bg-red-100 text-red-700'
+                                : p.priority === 'media'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {prioridadeLabel(p.priority)}
+                          </span>
+                          {p.atrasado && (
+                            <span className="px-2 py-0.5 rounded-md bg-red-600 text-white text-xs font-semibold">
+                              Atrasado
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-400">Prazo: {p.due_date}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               )}
             </>
           )}
@@ -1411,7 +1404,6 @@ export default function PainelProjetos() {
                     key={c.id}
                     cliente={c}
                     onAtualizado={async () => {
-                      setClientes([])
                       await carregarCatalogos()
                     }}
                   />
@@ -1580,7 +1572,7 @@ export default function PainelProjetos() {
                 </div>
               )}
 
-              {/* Mover etapa (admin/líder/consultor com vínculo — v0.0.24) — motor da T1.5 pela tela */}
+              {/* Mover etapa (todos com acesso ao projeto) — motor da T1.5 pela tela */}
               {cartao.active && (
                 <div className="p-4 rounded-xl border border-slate-200 space-y-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
