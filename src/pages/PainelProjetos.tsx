@@ -1255,16 +1255,37 @@ export default function PainelProjetos() {
                     </Label>
                     <Select value={etapa} onValueChange={setEtapa}>
                       <SelectTrigger className="w-full h-11 text-sm">
-                        <SelectValue placeholder="Selecione a etapa" />
+                        <SelectValue
+                          placeholder={
+                            etapasEsteira.length === 0
+                              ? 'Carregando etapas...'
+                              : 'Selecione a etapa'
+                          }
+                        />
                       </SelectTrigger>
                       <SelectContent>
-                        {etapasEsteira.map((s) => (
-                          <SelectItem key={s.id} value={s.name}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
+                        {etapasEsteira.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-slate-400">
+                            Carregando etapas da esteira...
+                          </div>
+                        ) : (
+                          etapasEsteira.map((s) => (
+                            <SelectItem key={s.id} value={s.name}>
+                              {s.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
+                    {etapasEsteira.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void carregarEsteira()}
+                        className="text-xs text-[#0B3556] font-semibold hover:underline mt-1"
+                      >
+                        Recarregar etapas
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
