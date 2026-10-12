@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
 
-const VERSAO_BUILD = 'v0.0.31'
+const VERSAO_BUILD = 'v0.0.32'
 
 interface Cliente {
   id: string
@@ -179,7 +179,7 @@ export default function PainelProjetos() {
   useEffect(() => {
     void carregarCarteira()
     void carregarCatalogos()
-    void carregarEsteira()
+    void carregarEtapas()
     const t = setInterval(() => {
       void carregarCarteira(true)
     }, 30000)
@@ -225,20 +225,32 @@ export default function PainelProjetos() {
     }
   }
 
-  const carregarEsteira = async () => {
+  const carregarEtapas = async () => {
+    // Etapas + prioridades: endpoints abertos a qualquer usuário autenticado.
+    // NUNCA agrupar com /pipeline/versions (só-admin) — o 403 do consultor derrubava o
+    // carregamento inteiro e deixava o dropdown de etapas vazio para ele.
     try {
-      const [e, v, pr] = await Promise.all([
+      const [e, pr] = await Promise.all([
         pb.send('/backend/v1/pipeline', { method: 'GET' }),
-        pb.send('/backend/v1/pipeline/versions', { method: 'GET' }),
         pb.send('/backend/v1/priorities', { method: 'GET' }),
       ])
       setEtapasEsteira((e as { items: Etapa[] }).items)
-      setVersoesEsteira((v as { items: VersaoEsteira[] }).items)
       const prios = (pr as { items: Prioridade[] }).items
       setPrioridades(prios)
       setPrioItens(prios.map((p, i) => ({ name: p.name, value: p.value, ordem: i + 1 })))
     } catch {
-      setEsteiraMsg({ ok: false, text: 'Não foi possível carregar a esteira.' })
+      setEsteiraMsg({ ok: false, text: 'Não foi possível carregar as etapas.' })
+    }
+  }
+
+  const carregarEsteira = async () => {
+    // Painel completo (aba Esteira, só admin): etapas + versões + prioridades
+    await carregarEtapas()
+    try {
+      const v = await pb.send('/backend/v1/pipeline/versions', { method: 'GET' })
+      setVersoesEsteira((v as { items: VersaoEsteira[] }).items)
+    } catch {
+      setVersoesEsteira([])
     }
   }
 
@@ -294,7 +306,7 @@ export default function PainelProjetos() {
     setTransicaoDestino('')
     setKickoffInput('')
     if (etapasEsteira.length === 0) {
-      void carregarEsteira()
+      void carregarEtapas()
     }
     if (prioridades.length === 0) {
       try {
@@ -464,7 +476,7 @@ export default function PainelProjetos() {
   const criarProjeto = async (e: FormEvent) => {
     e.preventDefault()
     setProjMsg(null)
-    if (etapasEsteira.length === 0) await carregarEsteira()
+    if (etapasEsteira.length === 0) await carregarEtapas()
 
     const faltando: string[] = []
     if (!projKey.trim()) faltando.push('Chave do projeto')
