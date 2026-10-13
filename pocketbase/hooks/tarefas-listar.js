@@ -66,8 +66,8 @@ routerAdd(
         })
       }
 
-      // Atraso: prazo < hoje e status != concluída (padrão da carteira)
-      const agoraStr = new Date().toISOString().slice(0, 10)
+      // Atraso: prazo < hoje (Brasília, UTC-3) e status != concluída (padrão da carteira)
+      const agoraStr = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
       const dueStr = t.getDateTime('due_date').string()
       const atrasada = dueStr.slice(0, 10) < agoraStr && t.getString('status') !== 'concluida'
 

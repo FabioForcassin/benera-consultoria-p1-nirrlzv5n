@@ -90,7 +90,9 @@ routerAdd(
 
     // Caminho de erro obrigatório: prazo no passado (comparação lexicográfica segura,
     // padrão do projetos-listar). Aceita "YYYY-MM-DD" ou datetime ISO.
-    const hojeStr = new Date().toISOString().slice(0, 10)
+    // Fuso: "hoje" é a data de Brasília (UTC-3) — às 21h BRT o UTC já virou o dia e
+    // um prazo de hoje seria recusado injustamente.
+    const hojeStr = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const dueDia = dueDate.slice(0, 10)
     if (dueDia < hojeStr) {
       throw new BadRequestError('Prazo no passado não é permitido.')
