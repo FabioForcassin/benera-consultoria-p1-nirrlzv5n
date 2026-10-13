@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
 
-const VERSAO_BUILD = 'v0.0.35'
+const VERSAO_BUILD = 'v0.0.40'
 
 interface Cliente {
   id: string
@@ -97,6 +97,10 @@ interface Tarefa {
   itens: TarefaItem[]
   pendentes_obrigatorios: number
   created: string
+  bloqueio_motivo?: string
+  bloqueio_dono?: string
+  bloqueio_revisao?: string
+  retorno_motivo?: string
 }
 interface TarefaItem {
   id: string
@@ -206,6 +210,12 @@ export default function PainelProjetos() {
   const [tItens, setTItens] = useState('')
   const [tMsg, setTMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [tCarregando, setTCarregando] = useState(false)
+  const [bloqueioAberto, setBloqueioAberto] = useState<string | null>(null)
+  const [bMotivo, setBMotivo] = useState('')
+  const [bDono, setBDono] = useState('')
+  const [bRevisao, setBRevisao] = useState('')
+  const [retornoAberto, setRetornoAberto] = useState<string | null>(null)
+  const [rMotivo, setRMotivo] = useState('')
 
   // Carrega tudo no mount (etapas/prioridades para TODOS os papéis) + auto-refresh 30s
   useEffect(() => {
@@ -342,6 +352,12 @@ export default function PainelProjetos() {
     setTarefas([])
     setTMsg(null)
     setNovaTarefaAberta(false)
+    setBloqueioAberto(null)
+    setRetornoAberto(null)
+    setBMotivo('')
+    setBDono('')
+    setBRevisao('')
+    setRMotivo('')
     if (etapasEsteira.length === 0) {
       void carregarEtapas()
     }
@@ -480,6 +496,74 @@ export default function PainelProjetos() {
         body: JSON.stringify({ status: 'pendente' }),
       })
       setTMsg({ ok: true, text: 'Tarefa reaberta (voltou para pendente).' })
+      await carregarTarefas(cartao.project_key)
+    } catch (err) {
+      setTMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setTCarregando(false)
+    }
+  }
+
+  // T1.8 — Bloquear tarefa (CA-1-021): motivo, dono e data de revisão obrigatórios
+  const bloquearTarefa = async (tarefa: Tarefa) => {
+    if (!cartao) return
+    setTMsg(null)
+    setTCarregando(true)
+    try {
+      await pb.send('/backend/v1/tasks/' + tarefa.id, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'bloqueada',
+          bloqueio_motivo: bMotivo,
+          bloqueio_dono: bDono,
+          bloqueio_revisao: bRevisao,
+        }),
+      })
+      setTMsg({ ok: true, text: 'Tarefa bloqueada e registrada na auditoria.' })
+      setBloqueioAberto(null)
+      setBMotivo('')
+      setBDono('')
+      setBRevisao('')
+      await carregarTarefas(cartao.project_key)
+    } catch (err) {
+      setTMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setTCarregando(false)
+    }
+  }
+
+  // T1.8 — Liberar bloqueio (volta a pendente, auditado)
+  const liberarTarefa = async (tarefa: Tarefa) => {
+    if (!cartao) return
+    setTMsg(null)
+    setTCarregando(true)
+    try {
+      await pb.send('/backend/v1/tasks/' + tarefa.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'pendente' }),
+      })
+      setTMsg({ ok: true, text: 'Bloqueio liberado. Tarefa voltou para pendente.' })
+      await carregarTarefas(cartao.project_key)
+    } catch (err) {
+      setTMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setTCarregando(false)
+    }
+  }
+
+  // T1.8 — Devolver para correção (CA-1-022): motivo obrigatório, responsável preservado
+  const devolverTarefa = async (tarefa: Tarefa) => {
+    if (!cartao) return
+    setTMsg(null)
+    setTCarregando(true)
+    try {
+      await pb.send('/backend/v1/tasks/' + tarefa.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ retorno_motivo: rMotivo }),
+      })
+      setTMsg({ ok: true, text: 'Tarefa devolvida para correção (responsável preservado).' })
+      setRetornoAberto(null)
+      setRMotivo('')
       await carregarTarefas(cartao.project_key)
     } catch (err) {
       setTMsg({ ok: false, text: translateAuthError(err) })
@@ -1961,16 +2045,29 @@ export default function PainelProjetos() {
 
                 <div className="space-y-2">
                   {tarefas.map((t) => (
-                    <div key={t.id} className="p-3 rounded-lg border border-slate-200 bg-white">
+                    <div
+                      key={t.id}
+                      className={`p-3 rounded-lg border bg-white ${
+                        t.status === 'bloqueada'
+                          ? 'border-red-300'
+                          : 'border-slate-200'
+                      }`}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-[#0B3556] flex items-center gap-2 flex-wrap">
                             {t.titulo}
-                            {t.status === 'concluida' ? (
+                            {t.status === 'concluida' && (
                               <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-medium">
                                 concluída
                               </span>
-                            ) : (
+                            )}
+                            {t.status === 'bloqueada' && (
+                              <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium">
+                                bloqueada
+                              </span>
+                            )}
+                            {t.status === 'pendente' && (
                               <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">
                                 pendente
                               </span>
@@ -1985,31 +2082,137 @@ export default function PainelProjetos() {
                             {t.evidencia_esperada && <>Evidência: {t.evidencia_esperada} · </>}
                             Prazo: {t.due_date}
                           </div>
-                        </div>
-                        <div className="shrink-0">
-                          {t.status !== 'concluida' ? (
-                            <Button
-                              onClick={() => void concluirTarefa(t)}
-                              disabled={tCarregando}
-                              size="sm"
-                              className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Concluir
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={() => void reabrirTarefa(t)}
-                              disabled={tCarregando}
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7"
-                            >
-                              Reabrir
-                            </Button>
+                          {t.status === 'bloqueada' && (
+                            <div className="text-xs text-red-700 mt-1">
+                              Bloqueio: {t.bloqueio_motivo} · Dono: {t.bloqueio_dono} · Revisão: {t.bloqueio_revisao}
+                            </div>
+                          )}
+                          {t.retorno_motivo && (
+                            <div className="text-xs text-amber-700 mt-1">
+                              Devolvida p/ correção: {t.retorno_motivo}
+                            </div>
                           )}
                         </div>
+                        <div className="shrink-0 flex flex-col items-end gap-1.5">
+                          <div className="flex gap-1.5">
+                            {t.status === 'pendente' && (
+                              <>
+                                <Button
+                                  onClick={() => void concluirTarefa(t)}
+                                  disabled={tCarregando}
+                                  size="sm"
+                                  className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Concluir
+                                </Button>
+                                <Button
+                                  onClick={() =>
+                                    setBloqueioAberto(bloqueioAberto === t.id ? null : t.id)
+                                  }
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 text-xs h-7 text-red-600 border-red-200 hover:bg-red-50"
+                                >
+                                  <Ban className="w-3.5 h-3.5" />
+                                  Bloquear
+                                </Button>
+                              </>
+                            )}
+                            {t.status === 'bloqueada' && (
+                              <Button
+                                onClick={() => void liberarTarefa(t)}
+                                disabled={tCarregando}
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7"
+                              >
+                                Liberar bloqueio
+                              </Button>
+                            )}
+                            {t.status === 'concluida' && (
+                              <Button
+                                onClick={() =>
+                                  setRetornoAberto(retornoAberto === t.id ? null : t.id)
+                                }
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-xs h-7"
+                              >
+                                Devolver p/ correção
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       </div>
+
+                      {bloqueioAberto === t.id && (
+                        <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 space-y-2">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-600">Motivo do bloqueio *</Label>
+                            <Input
+                              value={bMotivo}
+                              onChange={(e) => setBMotivo(e.target.value)}
+                              placeholder="Ex.: aguardando acesso à base do cliente"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-slate-600">Dono do desbloqueio *</Label>
+                              <Input
+                                value={bDono}
+                                onChange={(e) => setBDono(e.target.value)}
+                                placeholder="Quem resolve"
+                                className="h-9 text-sm"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-slate-600">Data de revisão *</Label>
+                              <Input
+                                type="date"
+                                value={bRevisao}
+                                onChange={(e) => setBRevisao(e.target.value)}
+                                className="h-9 text-sm"
+                              />
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => void bloquearTarefa(t)}
+                            disabled={tCarregando}
+                            className="gap-2 bg-red-600 hover:bg-red-700 text-white"
+                            size="sm"
+                          >
+                            <Ban className="w-4 h-4" />
+                            Confirmar bloqueio
+                          </Button>
+                        </div>
+                      )}
+
+                      {retornoAberto === t.id && (
+                        <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-2">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-600">
+                              Motivo da devolução *
+                            </Label>
+                            <Input
+                              value={rMotivo}
+                              onChange={(e) => setRMotivo(e.target.value)}
+                              placeholder="Ex.: evidência não mostra a validação do cliente"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <Button
+                            onClick={() => void devolverTarefa(t)}
+                            disabled={tCarregando}
+                            className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                            size="sm"
+                          >
+                            Confirmar devolução
+                          </Button>
+                        </div>
+                      )}
+
                       {t.itens.length > 0 && (
                         <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
                           {t.itens.map((it) => (
@@ -2023,7 +2226,11 @@ export default function PainelProjetos() {
                                 onChange={(e) => void marcarItem(t, it, e.target.checked)}
                                 className="w-3.5 h-3.5"
                               />
-                              <span className={it.concluido ? 'line-through text-slate-400' : ''}>
+                              <span
+                                className={
+                                  it.concluido ? 'line-through text-slate-400' : ''
+                                }
+                              >
                                 {it.titulo}
                               </span>
                               {it.obrigatorio && (
@@ -2040,12 +2247,7 @@ export default function PainelProjetos() {
                       Nenhuma tarefa. Use "Nova tarefa" para criar a primeira.
                     </div>
                   )}
-                </div>
-                {tMsg && (
-                  <div className={`mt-2 text-xs ${tMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
-                    {tMsg.text}
-                  </div>
-                )}
+                </div>                )}
               </div>
 
               {/* Timeline (auditoria) */}

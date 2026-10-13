@@ -134,6 +134,68 @@ routerAdd(
     p.set('pipeline_version', versaoAtiva)
     $app.save(p)
 
+    // T1.8 — Handoff automático da etapa (CA-1-023): chave determinística
+    // etapa:{projeto}:{destino} — reprocessar a transição NÃO duplica a tarefa.
+    const handoffKey = 'etapa:' + projectKey + ':' + destino
+    let handoffInfo = null
+    let existente = null
+    try {
+      existente = $app.findFirstRecordByData('handoffs', 'handoff_key', handoffKey)
+    } catch (_) {
+      existente = null
+    }
+    if (existente) {
+      // Retry da transição: tenta conservada no histórico, sem duplicar estado
+      const retries = (existente.getInt('retry_count') || 0) + 1
+      existente.set('retry_count', retries)
+      $app.save(existente)
+      const auditColR = $app.findCollectionByNameOrId('audit_log')
+      const logR = new Record(auditColR)
+      logR.set('actor_id', auth.id)
+      logR.set('actor_email', auth.getString('email'))
+      logR.set('action', 'handoff_retry')
+      logR.set('project_key', projectKey)
+      logR.set('detail', 'handoff reprocessado (retry ' + retries + '): ' + handoffKey)
+      $app.save(logR)
+      handoffInfo = {
+        retry: true,
+        handoff_key: handoffKey,
+        task_id: existente.getString('task_id') || null,
+      }
+    } else {
+      const tasksCol = $app.findCollectionByNameOrId('tasks')
+      const recH = new Record(tasksCol)
+      recH.set('project_key', projectKey)
+      recH.set('titulo', 'Handoff — ' + destino)
+      recH.set(
+        'descricao',
+        'Tarefa de handoff gerada automaticamente na transição para "' + destino + '".',
+      )
+      recH.set('assignee_id', p.getString('owner_id'))
+      recH.set('due_date', p.getDateTime('due_date').string().slice(0, 10))
+      recH.set('status', 'pendente')
+      recH.set('evidencia_esperada', 'handoff registrado e fila atualizada')
+      recH.set('created_by', auth.id)
+      $app.save(recH)
+      const handoffsCol = $app.findCollectionByNameOrId('handoffs')
+      const h = new Record(handoffsCol)
+      h.set('handoff_key', handoffKey)
+      h.set('project_key', projectKey)
+      h.set('task_id', recH.id)
+      h.set('retry_count', 0)
+      h.set('created_by', auth.id)
+      $app.save(h)
+      const auditColH = $app.findCollectionByNameOrId('audit_log')
+      const logH = new Record(auditColH)
+      logH.set('actor_id', auth.id)
+      logH.set('actor_email', auth.getString('email'))
+      logH.set('action', 'handoff_created')
+      logH.set('project_key', projectKey)
+      logH.set('detail', 'handoff gerado: ' + handoffKey + ' → tarefa "Handoff — ' + destino + '"')
+      $app.save(logH)
+      handoffInfo = { retry: false, handoff_key: handoffKey, task_id: recH.id }
+    }
+
     // CA-1-015: histórico da transição com ator e horário
     const auditCol = $app.findCollectionByNameOrId('audit_log')
     const log = new Record(auditCol)
@@ -158,6 +220,7 @@ routerAdd(
       stage: destino,
       pipeline_version: versaoAtiva,
       previous_stage: etapaAtual,
+      handoff: handoffInfo,
     })
   },
   $apis.requireAuth(),

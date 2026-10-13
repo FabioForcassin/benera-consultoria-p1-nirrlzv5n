@@ -50,14 +50,32 @@ routerAdd(
       status: '',
       itens: '',
       evidencia: '',
+      bloqueio_motivo: '',
+      bloqueio_dono: '',
+      bloqueio_revisao: '',
+      retorno_motivo: '',
     })
     e.bindBody(data)
     const novoStatus = (data.status || '').trim()
     const itensJson = (data.itens || '').trim()
     const evidencia = (data.evidencia || '').trim()
+    const bloqueioMotivo = (data.bloqueio_motivo || '').trim()
+    const bloqueioDono = (data.bloqueio_dono || '').trim()
+    const bloqueioRevisao = (data.bloqueio_revisao || '').trim()
+    const retornoMotivo = (data.retorno_motivo || '').trim()
 
-    if (!novoStatus && !itensJson && !evidencia) {
-      throw new BadRequestError('Nada para atualizar (informe status, itens ou evidência).')
+    if (
+      !novoStatus &&
+      !itensJson &&
+      !evidencia &&
+      !bloqueioMotivo &&
+      !bloqueioDono &&
+      !bloqueioRevisao &&
+      !retornoMotivo
+    ) {
+      throw new BadRequestError(
+        'Nada para atualizar (informe status, itens, evidência, bloqueio ou retorno).',
+      )
     }
 
     const eventos = []
@@ -104,13 +122,71 @@ routerAdd(
       t.set('evidencia_esperada', evidencia.slice(0, 500))
     }
 
-    // --- Status ---
-    if (novoStatus) {
+    // --- Bloqueio (CA-1-021): motivo + dono + data de revisão obrigatórios ---
+    // Pode vir como status='bloqueada' OU como campos de bloqueio diretos.
+    const pediuBloqueio =
+      novoStatus === 'bloqueada' || bloqueioMotivo || bloqueioDono || bloqueioRevisao
+    if (pediuBloqueio) {
+      if (t.getString('status') === 'concluida') {
+        throw new BadRequestError(
+          'Tarefa concluída não pode ser bloqueada — devolva para correção.',
+        )
+      }
+      const faltandoBloqueio = []
+      if (!bloqueioMotivo) faltandoBloqueio.push('motivo')
+      if (!bloqueioDono) faltandoBloqueio.push('dono')
+      if (!bloqueioRevisao) faltandoBloqueio.push('data de revisão')
+      if (faltandoBloqueio.length > 0) {
+        // CA-1-021: salvamento RECUSADO sem perder a tarefa (não altera nada)
+        throw new BadRequestError(
+          'Bloqueio incompleto — informe: ' + faltandoBloqueio.join(', ') + '.',
+        )
+      }
+      t.set('status', 'bloqueada')
+      t.set('bloqueio_motivo', bloqueioMotivo.slice(0, 500))
+      t.set('bloqueio_dono', bloqueioDono.slice(0, 200))
+      t.set('bloqueio_revisao', bloqueioRevisao.replace('T', ' ').replace('Z', ''))
+      $app.save(t)
+      eventos.push('task_blocked')
+    }
+
+    // --- Retorno para correção (CA-1-022): motivo obrigatório; responsável PRESERVADO ---
+    if (retornoMotivo) {
+      if (t.getString('status') !== 'concluida' && !pediuBloqueio) {
+        // só faz sentido devolver tarefa que estava concluída (ou que acabou de ser bloqueada)
+        if (t.getString('status') !== 'bloqueada') {
+          throw new BadRequestError(
+            'Retorno para correção aplica-se a tarefa concluída ou bloqueada.',
+          )
+        }
+      }
+      t.set('status', 'pendente')
+      t.set('retorno_motivo', retornoMotivo.slice(0, 500))
+      t.set('retorno_por', auth.getString('email').slice(0, 100))
+      // assignee NÃO é alterado — preservado (CA-1-022)
+      $app.save(t)
+      eventos.push('task_returned')
+    }
+
+    // --- Liberar bloqueio (volta a pendente, auditado) ---
+    if (novoStatus === 'pendente' && t.getString('status') === 'bloqueada' && !retornoMotivo) {
+      t.set('status', 'pendente')
+      $app.save(t)
+      eventos.push('task_unblocked')
+    }
+
+    // --- Status (concluida / pendente comum) ---
+    if (novoStatus && novoStatus !== 'bloqueada' && !pediuBloqueio && !retornoMotivo) {
       if (novoStatus !== 'pendente' && novoStatus !== 'concluida') {
-        throw new BadRequestError('Status inválido (use pendente ou concluida).')
+        throw new BadRequestError('Status inválido (use pendente, concluida ou bloqueada).')
       }
 
       if (novoStatus === 'concluida') {
+        if (t.getString('status') === 'bloqueada') {
+          throw new BadRequestError(
+            'Tarefa bloqueada não pode ser concluída — libere o bloqueio antes.',
+          )
+        }
         // CA-1-020: item obrigatório pendente bloqueia a conclusão
         const itensTarefa = $app.findRecordsByFilter(
           'task_items',
@@ -131,12 +207,12 @@ routerAdd(
         $app.save(t)
         eventos.push('task_completed')
       } else {
-        // Reabrir tarefa concluída (volta para pendente, auditado)
+        // Reabrir tarefa concluída SEM motivo = reabertura simples (auditada)
         t.set('status', 'pendente')
         $app.save(t)
         eventos.push('task_updated')
       }
-    } else if (itensJson || evidencia) {
+    } else if (!pediuBloqueio && !retornoMotivo && (itensJson || evidencia)) {
       t.set('updated', new Date().toISOString().replace('T', ' ').slice(0, 19) + '.000Z')
       $app.save(t)
       eventos.push('task_updated')
@@ -168,6 +244,10 @@ routerAdd(
       titulo: t.getString('titulo'),
       status: t.getString('status'),
       evidencia_esperada: t.getString('evidencia_esperada'),
+      bloqueio_motivo: t.getString('bloqueio_motivo'),
+      bloqueio_dono: t.getString('bloqueio_dono'),
+      bloqueio_revisao: t.getDateTime('bloqueio_revisao').string().slice(0, 10),
+      retorno_motivo: t.getString('retorno_motivo'),
     })
   },
   $apis.requireAuth(),
