@@ -1,4 +1,4 @@
-// T1.8 — Handoff idempotente (CA-1-023).
+// T1.8 — Handoff idempotente (CA-1-023). [redeploy-forçado v0.0.43b]
 // POST /backend/v1/projects/{key}/handoff — cria a tarefa de handoff UMA VEZ por handoff_key.
 // 1ª chamada: cria tarefa + registro em handoffs → 201.
 // Reenvio com a MESMA chave: NÃO duplica — responde 200 com retry: true e incrementa
