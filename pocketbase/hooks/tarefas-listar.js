@@ -83,6 +83,10 @@ routerAdd(
         itens: itensResp,
         pendentes_obrigatorios: pendObrigatorios,
         created: t.getDateTime('created').string(),
+        bloqueio_motivo: t.getString('bloqueio_motivo'),
+        bloqueio_dono: t.getString('bloqueio_dono'),
+        bloqueio_revisao: t.getDateTime('bloqueio_revisao').string().slice(0, 10),
+        retorno_motivo: t.getString('retorno_motivo'),
       })
     }
     return e.json(200, { items: resposta })
