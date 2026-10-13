@@ -1,7 +1,10 @@
-// T1.5 — Transição de etapa com validação de critérios da esteira ativa (CA-1-015/016).
+// T1.5+T1.8 — Transição de etapa com validação de critérios da esteira ativa (CA-1-015/016)
+// + handoff automático idempotente (CA-1-023). [recarregado v0.0.46]
 // POST /backend/v1/projects/{key}/transicao — admin/líder executam; consultor/revisor não.
 // Válida: atualiza etapa + histórico com ator/horário e versão da esteira usada.
 // Inválida (critério de entrada não atendido): bloqueada e auditada (transition_blocked).
+// Handoff automático: chave determinística etapa:{projeto}:{destino} — reprocessar a
+// transição NÃO duplica a tarefa (retry conservado no histórico via handoff_retry).
 routerAdd(
   'POST',
   '/backend/v1/projects/{key}/transicao',
@@ -145,7 +148,7 @@ routerAdd(
       existente = null
     }
     if (existente) {
-      // Retry da transição: tenta conservada no histórico, sem duplicar estado
+      // Retry da transição: tentativa conservada no histórico, sem duplicar estado
       const retries = (existente.getInt('retry_count') || 0) + 1
       existente.set('retry_count', retries)
       $app.save(existente)
@@ -203,16 +206,7 @@ routerAdd(
     log.set('actor_email', auth.getString('email'))
     log.set('action', 'stage_transition')
     log.set('project_key', projectKey)
-    log.set(
-      'detail',
-      etapaAtual +
-        ' → ' +
-        destino +
-        ' (esteira v' +
-        versaoAtiva +
-        (faltando.length ? '' : '') +
-        ')',
-    )
+    log.set('detail', etapaAtual + ' → ' + destino + ' (esteira v' + versaoAtiva + ')')
     $app.save(log)
 
     return e.json(200, {
