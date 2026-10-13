@@ -1,10 +1,12 @@
-// T1.7 — Atualizar tarefa e itens do checklist.
+// T1.7+T1.8 — Atualizar tarefa e itens do checklist; bloqueio e retorno (CA-1-020/021/022).
 // PATCH /backend/v1/tasks/{id} — quem pode: admin/líder (qualquer projeto); consultor/revisor
 // com vínculo ao projeto da tarefa (sem vínculo = 403 auditado).
-// Regras server-side (CA-1-020): só admin/líder (ou criador) alteram itens; consultor marca
-// conclusão de item; CONCLUSÃO DA TAREFA é recusada com item obrigatório pendente (400 nomeando
-// os itens). Reabrir tarefa concluída volta para 'pendente' (auditado).
-// Auditado: task_updated / task_completed (CA-1-025).
+// Regras server-side:
+//   CA-1-020: conclusão recusada com item obrigatório pendente (400 nomeando os itens).
+//   CA-1-021: bloqueio EXIGE motivo + dono + data de revisão (falta qualquer um = 400 sem
+//             alterar a tarefa); liberar volta a pendente (auditado).
+//   CA-1-022: retorno para correção EXIGE motivo; responsável PRESERVADO; auditado.
+// Auditado: task_blocked / task_unblocked / task_returned / task_updated / task_completed.
 routerAdd(
   'PATCH',
   '/backend/v1/tasks/{id}',
@@ -91,8 +93,6 @@ routerAdd(
       }
       if (!Array.isArray(itens)) throw new BadRequestError('Itens inválidos.')
 
-      // Atualização de itens é papel de quem executa (consultor) ou de quem gerencia
-      // (admin/líder); o criador da tarefa também pode ajustar (mesmo sem papel global).
       const ehCriador = t.getString('created_by') === auth.id
       if (!podeGlobal && !ehCriador && papel !== 'consultor' && papel !== 'revisor') {
         throw new BadRequestError('Sem permissão para alterar itens do checklist.')
@@ -106,7 +106,6 @@ routerAdd(
         } catch (_) {
           throw new BadRequestError('Item do checklist não encontrado: ' + String(it.id))
         }
-        // Item deve pertencer à tarefa
         if (item.getString('task_id') !== t.id) {
           throw new BadRequestError('Item não pertence a esta tarefa.')
         }
@@ -117,13 +116,12 @@ routerAdd(
       }
     }
 
-    // --- Evidência (texto descritivo nesta task; anexo entra na T1.10) ---
+    // --- Evidência (texto descritivo; anexo entra na T1.10) ---
     if (evidencia) {
       t.set('evidencia_esperada', evidencia.slice(0, 500))
     }
 
     // --- Bloqueio (CA-1-021): motivo + dono + data de revisão obrigatórios ---
-    // Pode vir como status='bloqueada' OU como campos de bloqueio diretos.
     const pediuBloqueio =
       novoStatus === 'bloqueada' || bloqueioMotivo || bloqueioDono || bloqueioRevisao
     if (pediuBloqueio) {
@@ -137,7 +135,7 @@ routerAdd(
       if (!bloqueioDono) faltandoBloqueio.push('dono')
       if (!bloqueioRevisao) faltandoBloqueio.push('data de revisão')
       if (faltandoBloqueio.length > 0) {
-        // CA-1-021: salvamento RECUSADO sem perder a tarefa (não altera nada)
+        // Salvamento RECUSADO sem perder a tarefa (nada é alterado)
         throw new BadRequestError(
           'Bloqueio incompleto — informe: ' + faltandoBloqueio.join(', ') + '.',
         )
@@ -152,13 +150,11 @@ routerAdd(
 
     // --- Retorno para correção (CA-1-022): motivo obrigatório; responsável PRESERVADO ---
     if (retornoMotivo) {
-      if (t.getString('status') !== 'concluida' && !pediuBloqueio) {
-        // só faz sentido devolver tarefa que estava concluída (ou que acabou de ser bloqueada)
-        if (t.getString('status') !== 'bloqueada') {
-          throw new BadRequestError(
-            'Retorno para correção aplica-se a tarefa concluída ou bloqueada.',
-          )
-        }
+      const statusAgora = t.getString('status')
+      if (statusAgora !== 'concluida' && statusAgora !== 'bloqueada' && !pediuBloqueio) {
+        throw new BadRequestError(
+          'Retorno para correção aplica-se a tarefa concluída ou bloqueada.',
+        )
       }
       t.set('status', 'pendente')
       t.set('retorno_motivo', retornoMotivo.slice(0, 500))
@@ -175,7 +171,7 @@ routerAdd(
       eventos.push('task_unblocked')
     }
 
-    // --- Status (concluida / pendente comum) ---
+    // --- Status comum (concluida / reabertura simples) ---
     if (novoStatus && novoStatus !== 'bloqueada' && !pediuBloqueio && !retornoMotivo) {
       if (novoStatus !== 'pendente' && novoStatus !== 'concluida') {
         throw new BadRequestError('Status inválido (use pendente, concluida ou bloqueada).')
@@ -213,8 +209,6 @@ routerAdd(
         eventos.push('task_updated')
       }
     } else if (!pediuBloqueio && !retornoMotivo && (itensJson || evidencia)) {
-      t.set('updated', new Date().toISOString().replace('T', ' ').slice(0, 19) + '.000Z')
-      $app.save(t)
       eventos.push('task_updated')
     }
 
