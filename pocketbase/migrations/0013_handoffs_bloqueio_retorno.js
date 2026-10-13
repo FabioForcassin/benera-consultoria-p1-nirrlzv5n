@@ -6,6 +6,9 @@
 migrate(
   (app) => {
     // 1) handoffs: registro de geração única de próxima tarefa ao concluir etapa.
+    // Relação task_id → tasks resolvida pelo id real (guardrail: coleção de migração
+    // anterior também precisa do id resolvido por nome no momento da criação).
+    const tasksId = app.findCollectionByNameOrId('tasks').id
     const handoffs = new Collection({
       name: 'handoffs',
       type: 'base',
@@ -20,7 +23,7 @@ migrate(
         {
           name: 'task_id',
           type: 'relation',
-          collectionId: 'tasks',
+          collectionId: tasksId,
           maxSelect: 1,
           cascadeDelete: true,
         },
