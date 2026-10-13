@@ -2048,9 +2048,7 @@ export default function PainelProjetos() {
                     <div
                       key={t.id}
                       className={`p-3 rounded-lg border bg-white ${
-                        t.status === 'bloqueada'
-                          ? 'border-red-300'
-                          : 'border-slate-200'
+                        t.status === 'bloqueada' ? 'border-red-300' : 'border-slate-200'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -2084,7 +2082,8 @@ export default function PainelProjetos() {
                           </div>
                           {t.status === 'bloqueada' && (
                             <div className="text-xs text-red-700 mt-1">
-                              Bloqueio: {t.bloqueio_motivo} · Dono: {t.bloqueio_dono} · Revisão: {t.bloqueio_revisao}
+                              Bloqueio: {t.bloqueio_motivo} · Dono: {t.bloqueio_dono} · Revisão:{' '}
+                              {t.bloqueio_revisao}
                             </div>
                           )}
                           {t.retorno_motivo && (
@@ -2159,7 +2158,9 @@ export default function PainelProjetos() {
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                             <div className="space-y-1.5">
-                              <Label className="text-xs text-slate-600">Dono do desbloqueio *</Label>
+                              <Label className="text-xs text-slate-600">
+                                Dono do desbloqueio *
+                              </Label>
                               <Input
                                 value={bDono}
                                 onChange={(e) => setBDono(e.target.value)}
@@ -2192,9 +2193,7 @@ export default function PainelProjetos() {
                       {retornoAberto === t.id && (
                         <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-2">
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-slate-600">
-                              Motivo da devolução *
-                            </Label>
+                            <Label className="text-xs text-slate-600">Motivo da devolução *</Label>
                             <Input
                               value={rMotivo}
                               onChange={(e) => setRMotivo(e.target.value)}
@@ -2226,11 +2225,7 @@ export default function PainelProjetos() {
                                 onChange={(e) => void marcarItem(t, it, e.target.checked)}
                                 className="w-3.5 h-3.5"
                               />
-                              <span
-                                className={
-                                  it.concluido ? 'line-through text-slate-400' : ''
-                                }
-                              >
+                              <span className={it.concluido ? 'line-through text-slate-400' : ''}>
                                 {it.titulo}
                               </span>
                               {it.obrigatorio && (
@@ -2247,7 +2242,7 @@ export default function PainelProjetos() {
                       Nenhuma tarefa. Use "Nova tarefa" para criar a primeira.
                     </div>
                   )}
-                </div>                )}
+                </div>
               </div>
 
               {/* Timeline (auditoria) */}
