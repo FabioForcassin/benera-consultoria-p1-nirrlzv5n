@@ -2382,7 +2382,7 @@ export default function PainelProjetos() {
               </div>
 
               {/* Workspace (T1.10) */}
-              <div className="p-4 rounded-xl border border-slate-200">
+              <div className="p-4 rounded-xl border border-slate-200 mb-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                     Workspace {ws ? `(${ws.total})` : ''}
