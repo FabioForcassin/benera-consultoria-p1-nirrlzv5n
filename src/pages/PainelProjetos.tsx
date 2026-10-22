@@ -453,6 +453,8 @@ export default function PainelProjetos() {
     } catch {
       setWs(null)
     }
+    // [T1.10-debug] marcador de versão do carregamento
+    console.log('[T1.10] workspace carregado para', p.project_key)
   }
 
   const carregarWorkspace = async (key: string) => {
