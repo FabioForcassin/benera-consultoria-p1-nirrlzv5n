@@ -1,10 +1,13 @@
-// T1.10 — Atualizar/inativar item de workspace.
+// T1.10/T1.11 — Atualizar/inativar item de workspace.
 // PATCH /backend/v1/workspace/{id} — escopo por vínculo ao projeto do item.
 // Regras server-side:
 //   nota/comentario/documento → conteúdo/título/origem editáveis (auditado: workspace_updated)
+//   documento com origem_pendente → preencher origem_url COMPLETA o fallback
+//     (origem_pendente=false, auditado: workspace_completado — CA-1-030)
 //   entrega NÃO se edita (evidência de entrega aceita não se altera) — só inativar
 //   inativação (active=false) preserva o registro e o evento (rollback da SPEC)
-// Auditado: workspace_updated / workspace_archived (CA-1-028). [recarregado v0.0.51]
+// Auditado: workspace_updated / workspace_completado / workspace_archived (CA-1-028/030).
+// [reescrito v0.0.54]
 routerAdd(
   'PATCH',
   '/backend/v1/workspace/{id}',
@@ -68,6 +71,7 @@ routerAdd(
     const tipo = it.getString('tipo')
     const eventos = []
     const tituloAnterior = it.getString('titulo')
+    const eraPendente = it.getBool('origem_pendente')
 
     if (inativar) {
       it.set('active', false)
@@ -97,9 +101,14 @@ routerAdd(
         it.set('origem_tipo', novaOrigemTipo.slice(0, 50))
         mudou = true
       }
+      // T1.11 (CA-1-030): origem preenchida em item pendente completa o fallback
+      if (novaOrigem && eraPendente) {
+        it.set('origem_pendente', false)
+        mudou = true
+      }
       if (mudou) {
         $app.save(it)
-        eventos.push('workspace_updated')
+        eventos.push(eraPendente && novaOrigem ? 'workspace_completado' : 'workspace_updated')
       }
     }
 
@@ -110,15 +119,21 @@ routerAdd(
       log.set('actor_email', auth.getString('email'))
       log.set('action', ev)
       log.set('project_key', projectKey)
-      log.set(
-        'detail',
+      let detail =
         tipo +
+        ': ' +
+        tituloAnterior +
+        ' → ' +
+        it.getString('titulo') +
+        (inativar ? ' (inativado)' : '')
+      if (ev === 'workspace_completado') {
+        detail =
+          tipo +
           ': ' +
           tituloAnterior +
-          ' → ' +
-          it.getString('titulo') +
-          (inativar ? ' (inativado)' : ''),
-      )
+          ' — origem completada manualmente (registro manual, sem integração automática)'
+      }
+      log.set('detail', detail)
       $app.save(log)
     }
 
@@ -126,6 +141,7 @@ routerAdd(
       id: it.id,
       tipo: tipo,
       titulo: it.getString('titulo'),
+      origem_pendente: it.getBool('origem_pendente'),
       active: it.getBool('active'),
     })
   },

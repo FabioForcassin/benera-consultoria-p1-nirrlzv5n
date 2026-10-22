@@ -134,6 +134,7 @@ interface WorkspaceItem {
   conteudo: string
   origem_url: string
   origem_tipo: string
+  origem_pendente: boolean
   destinatario: string
   data_entrega: string
   entregue_por: string
@@ -2471,13 +2472,19 @@ export default function PainelProjetos() {
                       {wsTipo === 'documento' && (
                         <>
                           <div className="space-y-1.5">
-                            <Label className="text-xs text-slate-600">URL de origem *</Label>
+                            <Label className="text-xs text-slate-600">
+                              URL de origem (opcional)
+                            </Label>
                             <Input
                               value={wsOrigem}
                               onChange={(e) => setWsOrigem(e.target.value)}
                               placeholder="https://..."
                               className="h-9 text-sm"
                             />
+                            <div className="text-[10px] text-slate-400">
+                              Sem URL agora? O item fica com ORIGEM PENDENTE — registro manual, sem
+                              integração automática.
+                            </div>
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs text-slate-600">Tipo de origem</Label>
@@ -2568,6 +2575,7 @@ export default function PainelProjetos() {
                               <Input
                                 value={wsEditOrigem}
                                 onChange={(e) => setWsEditOrigem(e.target.value)}
+                                placeholder="URL de origem (preencher completa o pendente)"
                                 className="h-9 text-sm"
                               />
                             )}
@@ -2600,6 +2608,11 @@ export default function PainelProjetos() {
                                 {item.conteudo && (
                                   <div className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">
                                     {item.conteudo}
+                                  </div>
+                                )}
+                                {item.tipo === 'documento' && item.origem_pendente && (
+                                  <div className="mt-1 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                                    ORIGEM PENDENTE — registro manual, sem integração automática
                                   </div>
                                 )}
                                 {item.origem_url && (

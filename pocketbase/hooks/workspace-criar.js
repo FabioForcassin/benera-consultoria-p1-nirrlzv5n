@@ -1,11 +1,12 @@
-// T1.10 — Criar item de workspace: nota interna, comentário, documento/link ou entrega.
+// T1.10/T1.11 — Criar item de workspace: nota interna, comentário, documento/link ou entrega.
 // POST /backend/v1/projects/{key}/workspace — escopo por vínculo (padrão T1.7):
 // admin/líder qualquer projeto; consultor/revisor com vínculo (senão 403 auditado).
 // Validação por tipo (server-side, CA-1-026/027):
 //   nota/comentario  → título + conteúdo obrigatórios
-//   documento/link   → título + origem_url obrigatórios (origem_tipo recomendada)
+//   documento/link   → título obrigatório; SEM origem_url nasce com origem_pendente=true
+//                      (fallback manual, CA-1-030 — registro manual, sem integração automática)
 //   entrega          → título + destinatário + data obrigatórios; entregue_por = ator
-// Auditado: workspace_created / entrega_registered (CA-1-028). [recarregado v0.0.51]
+// Auditado: workspace_created / entrega_registered (CA-1-028). [reescrito v0.0.54]
 routerAdd(
   'POST',
   '/backend/v1/projects/{key}/workspace',
@@ -76,9 +77,6 @@ routerAdd(
     if (tipo === 'nota' || tipo === 'comentario') {
       if (conteudo.length < 3) faltantes.push('conteudo')
     }
-    if (tipo === 'documento') {
-      if (!origemUrl) faltantes.push('origem_url')
-    }
     if (tipo === 'entrega') {
       if (!destinatario) faltantes.push('destinatario')
       if (!dataEntrega) faltantes.push('data_entrega')
@@ -90,6 +88,9 @@ routerAdd(
       }
       throw new BadRequestError('Campos obrigatórios faltando.', errors)
     }
+
+    // T1.11 (CA-1-030): documento sem origem nasce PENDENTE (fallback manual) — não recusa.
+    const origemPendente = tipo === 'documento' && !origemUrl
 
     const col = $app.findCollectionByNameOrId('workspace_items')
     const rec = new Record(col)
@@ -104,6 +105,7 @@ routerAdd(
       rec.set('data_entrega', dataEntrega.replace('T', ' ').replace('Z', ''))
     }
     rec.set('entregue_por', tipo === 'entrega' ? auth.getString('email').slice(0, 100) : '')
+    rec.set('origem_pendente', origemPendente)
     rec.set('active', true)
     rec.set('created_by', auth.id)
     $app.save(rec)
@@ -114,7 +116,14 @@ routerAdd(
     log.set('actor_email', auth.getString('email'))
     log.set('action', tipo === 'entrega' ? 'entrega_registered' : 'workspace_created')
     log.set('project_key', projectKey)
-    log.set('detail', tipo + ': ' + titulo + (tipo === 'entrega' ? ' → ' + destinatario : ''))
+    log.set(
+      'detail',
+      tipo +
+        ': ' +
+        titulo +
+        (tipo === 'entrega' ? ' → ' + destinatario : '') +
+        (origemPendente ? ' (origem pendente — registro manual, sem integração automática)' : ''),
+    )
     $app.save(log)
 
     return e.json(201, {
@@ -122,6 +131,7 @@ routerAdd(
       project_key: projectKey,
       tipo: tipo,
       titulo: titulo,
+      origem_pendente: origemPendente,
       active: true,
     })
   },

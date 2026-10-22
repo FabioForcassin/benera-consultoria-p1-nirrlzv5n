@@ -1,6 +1,7 @@
-// T1.10 — Listar itens de workspace do projeto com escopo por vínculo (padrão da carteira):
+// T1.10/T1.11 — Listar itens de workspace do projeto com escopo por vínculo (padrão da carteira):
 // admin/líder veem tudo; consultor/revisor só projetos com vínculo (senão 403 auditado).
-// Retorna itens ATIVOS agrupados por tipo (nota/comentario/documento/entrega). [recarregado v0.0.51]
+// Retorna itens ATIVOS agrupados por tipo (nota/comentario/documento/entrega),
+// com origem_pendente para o fallback manual (CA-1-030). [reescrito v0.0.54]
 routerAdd(
   'GET',
   '/backend/v1/projects/{key}/workspace',
@@ -63,6 +64,7 @@ routerAdd(
         conteudo: it.getString('conteudo'),
         origem_url: it.getString('origem_url'),
         origem_tipo: it.getString('origem_tipo'),
+        origem_pendente: it.getBool('origem_pendente'),
         destinatario: it.getString('destinatario'),
         data_entrega: it.getDateTime('data_entrega').string().slice(0, 10),
         entregue_por: it.getString('entregue_por'),
