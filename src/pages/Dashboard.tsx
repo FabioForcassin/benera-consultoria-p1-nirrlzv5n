@@ -78,6 +78,18 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="text-xs font-semibold border-slate-200 text-slate-700 hover:text-[#0B3556] hover:bg-slate-50 gap-1.5"
+            >
+              <Link to="/fila">
+                <ListFilter className="w-3.5 h-3.5" />
+                <span>Minha fila</span>
+              </Link>
+            </Button>
+
             {isAdmin && (
               <Button
                 variant="outline"

@@ -12,6 +12,7 @@ import VerifyEmail from './pages/VerifyEmail'
 import Dashboard from './pages/Dashboard'
 import PainelConvites from './pages/PainelConvites'
 import PainelProjetos from './pages/PainelProjetos'
+import MinhaFila from './pages/MinhaFila'
 import AceitarConvite from './pages/AceitarConvite'
 import NotFound from './pages/NotFound'
 
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/convites" element={<PainelConvites />} />
             <Route path="/projetos" element={<PainelProjetos />} />
+            <Route path="/fila" element={<MinhaFila />} />
             <Route path="/ativar-acesso" element={<AceitarConvite />} />
           </Route>
           <Route path="*" element={<NotFound />} />
