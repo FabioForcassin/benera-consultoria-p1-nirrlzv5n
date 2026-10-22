@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/dialog'
 import pb from '@/lib/pocketbase/client'
 
-const VERSAO_BUILD = 'v0.0.40'
+const VERSAO_BUILD = 'v0.0.49'
 
 interface Cliente {
   id: string
@@ -126,6 +126,25 @@ interface Prioridade {
   id: string
   name: string
   value: string
+}
+interface WorkspaceItem {
+  id: string
+  tipo: string
+  titulo: string
+  conteudo: string
+  origem_url: string
+  origem_tipo: string
+  destinatario: string
+  data_entrega: string
+  entregue_por: string
+  created: string
+}
+interface Workspace {
+  notas: WorkspaceItem[]
+  comentarios: WorkspaceItem[]
+  documentos: WorkspaceItem[]
+  entregas: WorkspaceItem[]
+  total: number
 }
 
 export default function PainelProjetos() {
@@ -216,6 +235,23 @@ export default function PainelProjetos() {
   const [bRevisao, setBRevisao] = useState('')
   const [retornoAberto, setRetornoAberto] = useState<string | null>(null)
   const [rMotivo, setRMotivo] = useState('')
+
+  // Workspace (T1.10) — seção no cartão 360
+  const [ws, setWs] = useState<Workspace | null>(null)
+  const [wsAba, setWsAba] = useState<'notas' | 'comentarios' | 'documentos' | 'entregas'>('notas')
+  const [wsTipo, setWsTipo] = useState('nota')
+  const [wsTitulo, setWsTitulo] = useState('')
+  const [wsConteudo, setWsConteudo] = useState('')
+  const [wsOrigem, setWsOrigem] = useState('')
+  const [wsOrigemTipo, setWsOrigemTipo] = useState('')
+  const [wsDestinatario, setWsDestinatario] = useState('')
+  const [wsData, setWsData] = useState('')
+  const [wsMsg, setWsMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [wsEditando, setWsEditando] = useState<string | null>(null)
+  const [wsEditTitulo, setWsEditTitulo] = useState('')
+  const [wsEditConteudo, setWsEditConteudo] = useState('')
+  const [wsEditOrigem, setWsEditOrigem] = useState('')
+  const [wsFormAberto, setWsFormAberto] = useState(false)
 
   // Carrega tudo no mount (etapas/prioridades para TODOS os papéis) + auto-refresh 30s
   useEffect(() => {
@@ -358,6 +394,12 @@ export default function PainelProjetos() {
     setBDono('')
     setBRevisao('')
     setRMotivo('')
+    setWs(null)
+    setWsMsg(null)
+    setWsFormAberto(false)
+    setWsEditando(null)
+    setWsAba('notas')
+    setWsTipo('nota')
     if (etapasEsteira.length === 0) {
       void carregarEtapas()
     }
@@ -401,6 +443,98 @@ export default function PainelProjetos() {
       setTarefas((tr as { items: Tarefa[] }).items)
     } catch {
       setTarefas([])
+    }
+    // Workspace (T1.10): carregamento SEPARADO (mesma lição)
+    try {
+      const w = await pb.send('/backend/v1/projects/' + p.project_key + '/workspace', {
+        method: 'GET',
+      })
+      setWs(w as Workspace)
+    } catch {
+      setWs(null)
+    }
+  }
+
+  const carregarWorkspace = async (key: string) => {
+    try {
+      const w = await pb.send('/backend/v1/projects/' + key + '/workspace', { method: 'GET' })
+      setWs(w as Workspace)
+    } catch {
+      setWs(null)
+    }
+  }
+
+  const criarWorkspaceItem = async () => {
+    if (!cartao) return
+    setWsMsg(null)
+    setCarregando(true)
+    try {
+      await pb.send('/backend/v1/projects/' + cartao.project_key + '/workspace', {
+        method: 'POST',
+        body: JSON.stringify({
+          tipo: wsTipo,
+          titulo: wsTitulo,
+          conteudo: wsConteudo,
+          origem_url: wsOrigem,
+          origem_tipo: wsOrigemTipo,
+          destinatario: wsDestinatario,
+          data_entrega: wsData,
+        }),
+      })
+      setWsMsg({ ok: true, text: 'Item criado e registrado na auditoria.' })
+      setWsTitulo('')
+      setWsConteudo('')
+      setWsOrigem('')
+      setWsOrigemTipo('')
+      setWsDestinatario('')
+      setWsData('')
+      setWsFormAberto(false)
+      await carregarWorkspace(cartao.project_key)
+    } catch (err) {
+      setWsMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const editarWorkspaceItem = async (item: WorkspaceItem) => {
+    if (!cartao) return
+    setWsMsg(null)
+    setCarregando(true)
+    try {
+      await pb.send('/backend/v1/workspace/' + item.id, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          titulo: wsEditTitulo,
+          conteudo: wsEditConteudo,
+          origem_url: wsEditOrigem,
+        }),
+      })
+      setWsMsg({ ok: true, text: 'Item editado e registrado na auditoria.' })
+      setWsEditando(null)
+      await carregarWorkspace(cartao.project_key)
+    } catch (err) {
+      setWsMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const inativarWorkspaceItem = async (item: WorkspaceItem) => {
+    if (!cartao) return
+    setWsMsg(null)
+    setCarregando(true)
+    try {
+      await pb.send('/backend/v1/workspace/' + item.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ inativar: true }),
+      })
+      setWsMsg({ ok: true, text: 'Item inativado (histórico preservado na auditoria).' })
+      await carregarWorkspace(cartao.project_key)
+    } catch (err) {
+      setWsMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setCarregando(false)
     }
   }
 
@@ -2243,6 +2377,296 @@ export default function PainelProjetos() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Workspace (T1.10) */}
+              <div className="p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                    Workspace {ws ? `(${ws.total})` : ''}
+                  </div>
+                  <div className="flex gap-1.5">
+                    {(['notas', 'comentarios', 'documentos', 'entregas'] as const).map((ab) => (
+                      <button
+                        key={ab}
+                        onClick={() => {
+                          setWsAba(ab)
+                          setWsTipo(
+                            ab === 'comentarios'
+                              ? 'comentario'
+                              : ab === 'documentos'
+                                ? 'documento'
+                                : ab === 'entregas'
+                                  ? 'entrega'
+                                  : 'nota',
+                          )
+                        }}
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                          wsAba === ab
+                            ? 'bg-[#0B3556] text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {ab === 'notas'
+                          ? 'Notas'
+                          : ab === 'comentarios'
+                            ? 'Comentários'
+                            : ab === 'documentos'
+                              ? 'Docs/Links'
+                              : 'Entregas'}
+                      </button>
+                    ))}
+                    <Button
+                      onClick={() => setWsFormAberto(!wsFormAberto)}
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs h-7"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
+                      {wsFormAberto ? 'Cancelar' : 'Novo'}
+                    </Button>
+                  </div>
+                </div>
+
+                {wsFormAberto && (
+                  <div className="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-600">Tipo *</Label>
+                        <Select value={wsTipo} onValueChange={setWsTipo}>
+                          <SelectTrigger className="w-full h-9 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="nota">Nota interna</SelectItem>
+                            <SelectItem value="comentario">Comentário</SelectItem>
+                            <SelectItem value="documento">Documento/Link</SelectItem>
+                            <SelectItem value="entrega">Entrega</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-600">Título *</Label>
+                        <Input
+                          value={wsTitulo}
+                          onChange={(e) => setWsTitulo(e.target.value)}
+                          placeholder="Ex.: Contexto da negociação"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      {(wsTipo === 'nota' || wsTipo === 'comentario') && (
+                        <div className="space-y-1.5 md:col-span-2">
+                          <Label className="text-xs text-slate-600">Conteúdo *</Label>
+                          <textarea
+                            value={wsConteudo}
+                            onChange={(e) => setWsConteudo(e.target.value)}
+                            rows={3}
+                            placeholder="Escreva aqui..."
+                            className="w-full text-sm rounded-md border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                          />
+                        </div>
+                      )}
+                      {wsTipo === 'documento' && (
+                        <>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-600">URL de origem *</Label>
+                            <Input
+                              value={wsOrigem}
+                              onChange={(e) => setWsOrigem(e.target.value)}
+                              placeholder="https://..."
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-600">Tipo de origem</Label>
+                            <Input
+                              value={wsOrigemTipo}
+                              onChange={(e) => setWsOrigemTipo(e.target.value)}
+                              placeholder="Ex.: SharePoint, Drive, link manual"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                        </>
+                      )}
+                      {wsTipo === 'entrega' && (
+                        <>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-600">Destinatário *</Label>
+                            <Input
+                              value={wsDestinatario}
+                              onChange={(e) => setWsDestinatario(e.target.value)}
+                              placeholder="Para quem foi entregue"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-600">Data da entrega *</Label>
+                            <Input
+                              type="date"
+                              value={wsData}
+                              onChange={(e) => setWsData(e.target.value)}
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <Button
+                      onClick={() => void criarWorkspaceItem()}
+                      disabled={carregando}
+                      className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                    >
+                      {carregando ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
+                      Criar{' '}
+                      {wsTipo === 'nota'
+                        ? 'nota'
+                        : wsTipo === 'comentario'
+                          ? 'comentário'
+                          : wsTipo === 'documento'
+                            ? 'documento'
+                            : 'entrega'}
+                    </Button>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {ws &&
+                    (wsAba === 'notas'
+                      ? ws.notas
+                      : wsAba === 'comentarios'
+                        ? ws.comentarios
+                        : wsAba === 'documentos'
+                          ? ws.documentos
+                          : ws.entregas
+                    ).map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-lg border border-slate-200 bg-white"
+                      >
+                        {wsEditando === item.id ? (
+                          <div className="space-y-2">
+                            <Input
+                              value={wsEditTitulo}
+                              onChange={(e) => setWsEditTitulo(e.target.value)}
+                              className="h-9 text-sm"
+                            />
+                            {(item.tipo === 'nota' || item.tipo === 'comentario') && (
+                              <textarea
+                                value={wsEditConteudo}
+                                onChange={(e) => setWsEditConteudo(e.target.value)}
+                                rows={3}
+                                className="w-full text-sm rounded-md border border-slate-200 px-3 py-2"
+                              />
+                            )}
+                            {item.tipo === 'documento' && (
+                              <Input
+                                value={wsEditOrigem}
+                                onChange={(e) => setWsEditOrigem(e.target.value)}
+                                className="h-9 text-sm"
+                              />
+                            )}
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => void editarWorkspaceItem(item)}
+                                disabled={carregando}
+                                size="sm"
+                                className="text-xs h-7 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                              >
+                                Salvar
+                              </Button>
+                              <Button
+                                onClick={() => setWsEditando(null)}
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7"
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-[#0B3556]">
+                                  {item.titulo}
+                                </div>
+                                {item.conteudo && (
+                                  <div className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">
+                                    {item.conteudo}
+                                  </div>
+                                )}
+                                {item.origem_url && (
+                                  <div className="text-xs text-slate-500 mt-1">
+                                    Origem:{' '}
+                                    <a
+                                      href={item.origem_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-[#0B3556] underline"
+                                    >
+                                      {item.origem_url.slice(0, 60)}
+                                    </a>
+                                    {item.origem_tipo ? ` (${item.origem_tipo})` : ''}
+                                  </div>
+                                )}
+                                {item.tipo === 'entrega' && (
+                                  <div className="text-xs text-slate-500 mt-1">
+                                    Entregue a {item.destinatario} em {item.data_entrega} por{' '}
+                                    {item.entregue_por}
+                                  </div>
+                                )}
+                                <div className="text-[10px] text-slate-400 mt-1">
+                                  {item.created.slice(0, 16)}
+                                </div>
+                              </div>
+                              <div className="shrink-0 flex gap-1.5">
+                                {item.tipo !== 'entrega' && (
+                                  <Button
+                                    onClick={() => {
+                                      setWsEditando(item.id)
+                                      setWsEditTitulo(item.titulo)
+                                      setWsEditConteudo(item.conteudo)
+                                      setWsEditOrigem(item.origem_url)
+                                    }}
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-xs h-7"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </Button>
+                                )}
+                                <Button
+                                  onClick={() => void inativarWorkspaceItem(item)}
+                                  disabled={carregando}
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-xs h-7 text-red-600 border-red-200 hover:bg-red-50"
+                                >
+                                  <Archive className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  {ws && ws.total === 0 && !wsFormAberto && (
+                    <div className="text-xs text-slate-400">
+                      Nenhum item. Use "Novo" para criar nota, comentário, documento ou entrega.
+                    </div>
+                  )}
+                  {!ws && <div className="text-xs text-slate-400">Workspace não carregado.</div>}
+                </div>
+                {wsMsg && (
+                  <div className={`mt-2 text-xs ${wsMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {wsMsg.text}
+                  </div>
+                )}
               </div>
 
               {/* Timeline (auditoria) */}
