@@ -5,7 +5,7 @@
 //   nota/comentario  → título + conteúdo obrigatórios
 //   documento/link   → título + origem_url obrigatórios (origem_tipo recomendada)
 //   entrega          → título + destinatário + data obrigatórios; entregue_por = ator
-// Auditado: workspace_created / entrega_registered (CA-1-028).
+// Auditado: workspace_created / entrega_registered (CA-1-028). [recarregado v0.0.51]
 routerAdd(
   'POST',
   '/backend/v1/projects/{key}/workspace',
@@ -71,7 +71,6 @@ routerAdd(
       throw new BadRequestError('Tipo inválido (use nota, comentario, documento ou entrega).')
     }
 
-    // Validação por tipo (caminho de erro obrigatório: campo obrigatório impede item)
     const faltantes = []
     if (titulo.length < 3) faltantes.push('titulo')
     if (tipo === 'nota' || tipo === 'comentario') {
@@ -109,7 +108,6 @@ routerAdd(
     rec.set('created_by', auth.id)
     $app.save(rec)
 
-    // Auditoria (CA-1-028)
     const auditCol = $app.findCollectionByNameOrId('audit_log')
     const log = new Record(auditCol)
     log.set('actor_id', auth.id)

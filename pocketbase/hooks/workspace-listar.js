@@ -1,6 +1,6 @@
 // T1.10 — Listar itens de workspace do projeto com escopo por vínculo (padrão da carteira):
 // admin/líder veem tudo; consultor/revisor só projetos com vínculo (senão 403 auditado).
-// Retorna itens ATIVOS agrupados por tipo (nota/comentario/documento/entrega).
+// Retorna itens ATIVOS agrupados por tipo (nota/comentario/documento/entrega). [recarregado v0.0.51]
 routerAdd(
   'GET',
   '/backend/v1/projects/{key}/workspace',

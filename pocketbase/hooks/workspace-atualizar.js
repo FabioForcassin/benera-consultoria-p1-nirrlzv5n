@@ -3,9 +3,8 @@
 // Regras server-side:
 //   nota/comentario/documento → conteúdo/título/origem editáveis (auditado: workspace_updated)
 //   entrega NÃO se edita (evidência de entrega aceita não se altera) — só inativar
-//   inativação (active=false) preserva o registro e o evento (rollback da SPEC:
-//   "inativar item e manter evento; não apagar evidência de entrega aceita")
-// Auditado: workspace_updated / workspace_archived (CA-1-028).
+//   inativação (active=false) preserva o registro e o evento (rollback da SPEC)
+// Auditado: workspace_updated / workspace_archived (CA-1-028). [recarregado v0.0.51]
 routerAdd(
   'PATCH',
   '/backend/v1/workspace/{id}',
@@ -104,7 +103,6 @@ routerAdd(
       }
     }
 
-    // Auditoria com antes→depois (padrão T1.4)
     const auditCol = $app.findCollectionByNameOrId('audit_log')
     for (const ev of eventos) {
       const log = new Record(auditCol)
