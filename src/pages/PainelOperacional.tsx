@@ -58,17 +58,34 @@ export default function PainelOperacional() {
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
 
-  const carregar = async (inicial = false) => {
+  // T1.12-fix: overrides explícitos — o setTimeout com closure antigo buscava com o
+  // estado ainda vazio (filtro mudava o rótulo mas não os totais). A busca recebe o
+  // novo valor na hora, sem depender do estado atrasado do render.
+  type Overrides = {
+    etapa?: string
+    prioridade?: string
+    owner?: string
+    atraso?: boolean
+    bloqueio?: boolean
+    encerrados?: boolean
+  }
+  const carregar = async (inicial = false, over?: Overrides) => {
     setCarregando(true)
     setErro('')
     try {
+      const etapa = over?.etapa !== undefined ? over.etapa : fEtapa
+      const prioridade = over?.prioridade !== undefined ? over.prioridade : fPrioridade
+      const owner = over?.owner !== undefined ? over.owner : fOwner
+      const atraso = over?.atraso !== undefined ? over.atraso : fAtraso
+      const bloqueio = over?.bloqueio !== undefined ? over.bloqueio : fBloqueio
+      const encerrados = over?.encerrados !== undefined ? over.encerrados : fEncerrados
       const params = new URLSearchParams()
-      if (fEtapa) params.set('etapa', fEtapa)
-      if (fPrioridade) params.set('prioridade', fPrioridade)
-      if (fOwner) params.set('owner', fOwner)
-      if (fAtraso) params.set('atraso', '1')
-      if (fBloqueio) params.set('bloqueio', '1')
-      if (fEncerrados) params.set('encerrados', '1')
+      if (etapa) params.set('etapa', etapa)
+      if (prioridade) params.set('prioridade', prioridade)
+      if (owner) params.set('owner', owner)
+      if (atraso) params.set('atraso', '1')
+      if (bloqueio) params.set('bloqueio', '1')
+      if (encerrados) params.set('encerrados', '1')
       const qs = params.toString()
       const d = (await pb.send('/backend/v1/painel' + (qs ? '?' + qs : ''), {
         method: 'GET',
@@ -102,7 +119,14 @@ export default function PainelOperacional() {
     setFAtraso(false)
     setFBloqueio(false)
     setFEncerrados(false)
-    setTimeout(() => void carregar(true), 0)
+    void carregar(true, {
+      etapa: '',
+      prioridade: '',
+      owner: '',
+      atraso: false,
+      bloqueio: false,
+      encerrados: false,
+    })
   }
 
   const filtroAtivo = fEtapa || fPrioridade || fOwner || fAtraso || fBloqueio || fEncerrados
@@ -151,8 +175,9 @@ export default function PainelOperacional() {
               <Select
                 value={fEtapa || 'todas'}
                 onValueChange={(v) => {
-                  setFEtapa(v === 'todas' ? '' : v)
-                  setTimeout(() => void carregar(), 0)
+                  const nv = v === 'todas' ? '' : v
+                  setFEtapa(nv)
+                  void carregar(false, { etapa: nv })
                 }}
               >
                 <SelectTrigger className="w-40 h-9 text-sm">
@@ -173,8 +198,9 @@ export default function PainelOperacional() {
               <Select
                 value={fPrioridade || 'todas'}
                 onValueChange={(v) => {
-                  setFPrioridade(v === 'todas' ? '' : v)
-                  setTimeout(() => void carregar(), 0)
+                  const nv = v === 'todas' ? '' : v
+                  setFPrioridade(nv)
+                  void carregar(false, { prioridade: nv })
                 }}
               >
                 <SelectTrigger className="w-40 h-9 text-sm">
@@ -195,8 +221,9 @@ export default function PainelOperacional() {
               <Select
                 value={fOwner || 'todos'}
                 onValueChange={(v) => {
-                  setFOwner(v === 'todos' ? '' : v)
-                  setTimeout(() => void carregar(), 0)
+                  const nv = v === 'todos' ? '' : v
+                  setFOwner(nv)
+                  void carregar(false, { owner: nv })
                 }}
               >
                 <SelectTrigger className="w-48 h-9 text-sm">
@@ -220,8 +247,13 @@ export default function PainelOperacional() {
               <button
                 key={t.label}
                 onClick={() => {
-                  t.set(!t.v)
-                  setTimeout(() => void carregar(), 0)
+                  const nv = !t.v
+                  t.set(nv)
+                  void carregar(false, {
+                    atraso: t.label === 'Só atrasados' ? nv : undefined,
+                    bloqueio: t.label === 'Só bloqueados' ? nv : undefined,
+                    encerrados: t.label === 'Incluir encerrados' ? nv : undefined,
+                  })
                 }}
                 className={`px-3 py-2 rounded-md text-xs font-medium border ${
                   t.v
