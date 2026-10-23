@@ -147,6 +147,19 @@ interface Workspace {
   entregas: WorkspaceItem[]
   total: number
 }
+interface Apontamento {
+  id: string
+  minutos: number
+  motivo: string
+  etapa: string
+  actor_email: string
+  created: string
+}
+interface Apontamentos {
+  itens: Apontamento[]
+  total: number
+  total_minutos: number
+}
 
 export default function PainelProjetos() {
   const { isAdmin, isLider, user } = useAuth()
@@ -253,6 +266,13 @@ export default function PainelProjetos() {
   const [wsEditConteudo, setWsEditConteudo] = useState('')
   const [wsEditOrigem, setWsEditOrigem] = useState('')
   const [wsFormAberto, setWsFormAberto] = useState(false)
+
+  // Apontamentos (T1.13) — seção no cartão 360
+  const [aps, setAps] = useState<Apontamentos | null>(null)
+  const [apMinutos, setApMinutos] = useState('')
+  const [apMotivo, setApMotivo] = useState('')
+  const [apMsg, setApMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [apCarregando, setApCarregando] = useState(false)
 
   // Carrega tudo no mount (etapas/prioridades para TODOS os papéis) + auto-refresh 30s
   useEffect(() => {
@@ -456,6 +476,8 @@ export default function PainelProjetos() {
     }
     // [T1.10-debug] marcador de versão do carregamento
     console.log('[T1.10] workspace carregado para', p.project_key)
+    // Apontamentos (T1.13): carregamento SEPARADO (mesma lição)
+    void carregarApontamentos(p.project_key)
   }
 
   const carregarWorkspace = async (key: string) => {
@@ -538,6 +560,53 @@ export default function PainelProjetos() {
       setWsMsg({ ok: false, text: translateAuthError(err) })
     } finally {
       setCarregando(false)
+    }
+  }
+
+  const carregarApontamentos = async (key: string) => {
+    try {
+      const a = await pb.send('/backend/v1/projects/' + key + '/apontamentos', { method: 'GET' })
+      setAps(a as Apontamentos)
+    } catch {
+      setAps(null)
+    }
+  }
+
+  const criarApontamento = async () => {
+    if (!cartao) return
+    setApMsg(null)
+    setApCarregando(true)
+    try {
+      await pb.send('/backend/v1/projects/' + cartao.project_key + '/apontamentos', {
+        method: 'POST',
+        body: JSON.stringify({ minutos: Number(apMinutos), motivo: apMotivo }),
+      })
+      setApMsg({ ok: true, text: 'Apontamento registrado e auditado (append-only).' })
+      setApMinutos('')
+      setApMotivo('')
+      await carregarApontamentos(cartao.project_key)
+    } catch (err) {
+      setApMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setApCarregando(false)
+    }
+  }
+
+  const inativarApontamento = async (id: string) => {
+    if (!cartao) return
+    setApMsg(null)
+    setApCarregando(true)
+    try {
+      await pb.send('/backend/v1/apontamentos/' + id, {
+        method: 'PATCH',
+        body: JSON.stringify({ inativar: true }),
+      })
+      setApMsg({ ok: true, text: 'Apontamento inativado (histórico preservado).' })
+      await carregarApontamentos(cartao.project_key)
+    } catch (err) {
+      setApMsg({ ok: false, text: translateAuthError(err) })
+    } finally {
+      setApCarregando(false)
     }
   }
 
@@ -2680,6 +2749,98 @@ export default function PainelProjetos() {
                 {wsMsg && (
                   <div className={`mt-2 text-xs ${wsMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
                     {wsMsg.text}
+                  </div>
+                )}
+              </div>
+
+              {/* Tempo (T1.13) — apontamentos de touch time */}
+              <div className="p-4 rounded-xl border border-slate-200 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                    Tempo {aps ? `(touch: ${Math.round((aps.total_minutos / 60) * 10) / 10}h)` : ''}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="text-xs text-slate-500">Touch (apontado)</div>
+                    <div className="text-lg font-bold text-[#0B3556]">
+                      {aps ? `${Math.round((aps.total_minutos / 60) * 10) / 10}h` : '—'}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="text-xs text-slate-500">Apontamentos ativos</div>
+                    <div className="text-lg font-bold text-[#0B3556]">{aps?.total ?? '—'}</div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="text-xs text-slate-500">Espera (ciclo − touch)</div>
+                    <div className="text-lg font-bold text-slate-500">no painel operacional</div>
+                  </div>
+                </div>
+                <div className="flex gap-2 mb-3">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={600}
+                    value={apMinutos}
+                    onChange={(e) => setApMinutos(e.target.value)}
+                    placeholder="Minutos (1–600)"
+                    className="h-9 text-sm w-40"
+                  />
+                  <Input
+                    value={apMotivo}
+                    onChange={(e) => setApMotivo(e.target.value)}
+                    placeholder="Motivo (ex.: entrevistas com gestores)"
+                    className="h-9 text-sm flex-1"
+                  />
+                  <Button
+                    onClick={() => void criarApontamento()}
+                    disabled={apCarregando}
+                    size="sm"
+                    className="gap-1.5 text-xs h-9 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Apontar
+                  </Button>
+                </div>
+                <div className="space-y-1.5">
+                  {(aps?.itens || []).map((a) => (
+                    <div
+                      key={a.id}
+                      className="flex items-center justify-between gap-2 p-2 rounded-lg border border-slate-200 bg-white"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-[#0B3556]">
+                          {a.minutos} min · {a.etapa}
+                        </div>
+                        <div className="text-xs text-slate-600 truncate">{a.motivo}</div>
+                        <div className="text-[10px] text-slate-400">
+                          {a.actor_email} · {a.created.slice(0, 16)}
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => void inativarApontamento(a.id)}
+                        disabled={apCarregando}
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7 text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        <Archive className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  {aps && aps.total === 0 && (
+                    <div className="text-xs text-slate-400">
+                      Sem apontamentos. Touch time é registro manual (append-only) — correção é novo
+                      apontamento, não edição.
+                    </div>
+                  )}
+                  {!aps && (
+                    <div className="text-xs text-slate-400">Apontamentos não carregados.</div>
+                  )}
+                </div>
+                {apMsg && (
+                  <div className={`mt-2 text-xs ${apMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {apMsg.text}
                   </div>
                 )}
               </div>

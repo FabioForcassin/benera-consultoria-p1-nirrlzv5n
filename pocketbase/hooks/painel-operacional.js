@@ -1,10 +1,16 @@
-// T1.12 — Painel operacional (CA-1-031): agregados por etapa, responsável, atraso,
-// bloqueio e prioridade, com filtros SERVER-SIDE — os agregados são calculados sobre
-// o RESULTADO FILTRADO, então sempre batem com a lista (prova verificável).
-// Escopo herdado da carteira: admin/líder veem tudo; consultor/revisor só projetos
-// com vínculo em project_members (owner ganha vínculo automático na criação — v0.0.32).
+// T1.12/T1.13 — Painel operacional: agregados filtráveis (CA-1-031) + métricas de tempo
+// e baseline (CA-1-032/033/037).
+// Agregados sobre o RESULTADO FILTRADO — totais sempre batem com a lista.
+// T1.13: por projeto da lista filtrada — ciclo (dias corridos, criação → último evento
+// de auditoria, BRT), touch (soma de minutos de apontamentos ATIVOS), espera
+// (ciclo − touch, piso 0), incompleto (sem apontamento → flag, nunca inventa número).
+// BASELINE como objeto calculado: período (primeira criação → hoje), relógio
+// ("dias corridos, BRT"), amostra (projetos/apontamentos/eventos considerados, corte
+// de 500 declarado) e limitações FIXAS — incluindo a nota anti-ganho (CA-1-037):
+// "baseline é o primeiro ciclo — não é ganho; não há comparação pós-baseline".
+// Escopo herdado da carteira: admin/líder veem tudo; consultor/revisor só com vínculo.
 // Atraso com fuso BRT (lição T1.7); bloqueio = projeto com ≥1 tarefa 'bloqueada' (T1.8).
-// Touch time/espera/ciclo e baseline são da T1.13; auditoria de consulta, da T1.14.
+// Exportação sanitizada e auditoria de consulta são da T1.14. [reescrito v0.0.59]
 routerAdd(
   'GET',
   '/backend/v1/painel',
@@ -60,6 +66,7 @@ routerAdd(
 
     // hoje em BRT (UTC-3) — lição T1.7
     const hojeBRT = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10)
+    const hojeMs = Date.now()
 
     // mapa de usuários (nome/e-mail do responsável)
     const usuarios = {}
@@ -80,8 +87,35 @@ routerAdd(
       }
     } catch (_) {}
 
-    // projetos → itens com flags
+    // T1.13: apontamentos ATIVOS por projeto + amostra global
+    const touchPorProjeto = {}
+    let amostraApontamentos = 0
+    try {
+      const aps = $app.findRecordsByFilter('apontamentos', 'active = true', '-created', 500, 0)
+      for (const a of aps) {
+        amostraApontamentos++
+        const pk = a.getString('project_key')
+        touchPorProjeto[pk] = (touchPorProjeto[pk] || 0) + a.getInt('minutos')
+      }
+    } catch (_) {}
+
+    // T1.13: último evento de auditoria por projeto (fim do ciclo) + amostra
+    const ultimoEventoPorProjeto = {}
+    let amostraEventos = 0
+    try {
+      const evs = $app.findRecordsByFilter('audit_log', 'id != ""', '-created', 500, 0)
+      for (const ev of evs) {
+        amostraEventos++
+        const pk = ev.getString('project_key')
+        if (pk && !ultimoEventoPorProjeto[pk]) {
+          ultimoEventoPorProjeto[pk] = ev.getDateTime('created').string()
+        }
+      }
+    } catch (_) {}
+
+    // projetos → itens com flags + métricas de tempo
     const itens = []
+    let primeiraCriacao = ''
     const projetos = $app.findRecordsByFilter('projects', 'id != ""', '-created', 500, 0)
     for (const p of projetos) {
       const key = p.getString('project_key')
@@ -93,6 +127,26 @@ routerAdd(
       const due = dueStr.indexOf('0001-') === 0 ? '' : dueStr.slice(0, 10)
       const atrasado = !encerrado && !!due && due < hojeBRT
       const ownerId = p.getString('owner_id')
+
+      // T1.13: ciclo em dias corridos (criação → último evento, BRT)
+      const criadoStr = p.getDateTime('created').string()
+      const criadoDia = criadoStr.slice(0, 10)
+      if (criadoDia && (!primeiraCriacao || criadoDia < primeiraCriacao)) {
+        primeiraCriacao = criadoDia
+      }
+      const fimStr = ultimoEventoPorProjeto[key] || criadoStr
+      let cicloDias = 0
+      try {
+        const t1 = new Date(criadoStr.replace(' ', 'T') + 'Z').getTime()
+        const t2 = new Date(fimStr.replace(' ', 'T') + 'Z').getTime()
+        if (!isNaN(t1) && !isNaN(t2) && t2 >= t1) {
+          cicloDias = Math.round(((t2 - t1) / 86400000) * 10) / 10
+        }
+      } catch (_) {}
+      const touchMin = touchPorProjeto[key] || 0
+      const touchDias = Math.round((touchMin / 60 / 24) * 10) / 10
+      const esperaDias = Math.max(0, Math.round((cicloDias - touchDias) * 10) / 10)
+
       const item = {
         project_key: key,
         name: p.getString('name'),
@@ -104,6 +158,11 @@ routerAdd(
         atrasado: atrasado,
         bloqueado: !!bloqueadas[key],
         encerrado: encerrado,
+        ciclo_dias: cicloDias,
+        touch_min: touchMin,
+        touch_dias: touchDias,
+        espera_dias: esperaDias,
+        incompleto: touchMin === 0,
       }
       // filtros server-side
       if (fEtapa && stage !== fEtapa) continue
@@ -145,6 +204,34 @@ routerAdd(
     const ordenar = (m) =>
       Object.values(m).sort((a, b) => b.total - a.total || (a.name < b.name ? -1 : 1))
 
+    // T1.13: BASELINE do piloto (CA-1-033/037) — objeto calculado, não declarativo
+    const periodoInicio = primeiraCriacao || hojeBRT
+    let periodoDias = 0
+    try {
+      const t1 = new Date(periodoInicio + 'T00:00:00Z').getTime()
+      periodoDias = Math.max(0, Math.round(((hojeMs - t1) / 86400000) * 10) / 10)
+    } catch (_) {}
+    const baseline = {
+      tipo: 'baseline — primeiro ciclo do piloto',
+      periodo_inicio: periodoInicio,
+      periodo_fim: hojeBRT,
+      periodo_dias: periodoDias,
+      relogio: 'dias corridos, fuso BRT (UTC-3)',
+      amostra: {
+        projetos: itens.length,
+        apontamentos_ativos: amostraApontamentos,
+        eventos_auditoria: amostraEventos,
+        corte: '500 registros mais recentes por fonte',
+      },
+      limitacoes: [
+        'Baseline é o PRIMEIRO ciclo — não é ganho; não há comparação pós-baseline (CA-1-037).',
+        'Touch time vem de apontamento manual (append-only, auditado) — risco de gameabilidade declarado na SPEC; eventos automáticos ficam separados.',
+        'Espera = ciclo − touch (piso 0) — aproximação, não medição direta.',
+        'Amostra cortada em 500 registros mais recentes por fonte (projetos, apontamentos, eventos).',
+        'Projetos sem apontamento aparecem como incompletos — dado ausente não é zero.',
+      ],
+    }
+
     return e.json(200, {
       totais: totais,
       porEtapa: ordenar(porEtapa),
@@ -152,6 +239,7 @@ routerAdd(
       porPrioridade: ordenar(porPrioridade),
       lista: itens.slice(0, 100),
       totalLista: itens.length,
+      baseline: baseline,
       filtros: {
         etapa: fEtapa,
         prioridade: fPrioridade,

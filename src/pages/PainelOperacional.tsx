@@ -338,6 +338,76 @@ export default function PainelOperacional() {
           ))}
         </div>
 
+        {/* Tempo e baseline (T1.13) */}
+        <div className="p-4 rounded-xl bg-white border border-slate-200 mb-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-3">
+            Tempo e baseline (piloto)
+          </div>
+          <table className="w-full text-xs mb-4">
+            <thead>
+              <tr className="text-slate-400 text-left">
+                <th className="pb-2 font-medium">Projeto</th>
+                <th className="pb-2 font-medium text-right">Ciclo (d)</th>
+                <th className="pb-2 font-medium text-right">Touch (d)</th>
+                <th className="pb-2 font-medium text-right">Espera (d)</th>
+                <th className="pb-2 font-medium text-right">Touch (min)</th>
+                <th className="pb-2 font-medium">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(dados?.lista || []).map((i) => (
+                <tr key={i.project_key} className="border-t border-slate-100">
+                  <td className="py-1.5 text-slate-700 font-semibold">{i.project_key}</td>
+                  <td className="py-1.5 text-right text-[#0B3556]">{i.ciclo_dias}</td>
+                  <td className="py-1.5 text-right text-[#0B3556]">{i.touch_dias}</td>
+                  <td className="py-1.5 text-right text-slate-500">{i.espera_dias}</td>
+                  <td className="py-1.5 text-right text-slate-500">{i.touch_min}</td>
+                  <td className="py-1.5">
+                    {i.incompleto ? (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold">
+                        INCOMPLETO (sem apontamento)
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-semibold">
+                        completo
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {(!dados || dados.totalLista === 0) && (
+                <tr>
+                  <td colSpan={6} className="py-2 text-slate-400">
+                    Sem projetos no filtro atual.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {dados?.baseline && (
+            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1.5">
+              <div className="font-semibold text-[#0B3556]">{dados.baseline.tipo}</div>
+              <div className="text-slate-600">
+                Período: {dados.baseline.periodo_inicio} → {dados.baseline.periodo_fim} (
+                {dados.baseline.periodo_dias} dias) · Relógio: {dados.baseline.relogio}
+              </div>
+              <div className="text-slate-600">
+                Amostra: {dados.baseline.amostra.projetos} projetos ·{' '}
+                {dados.baseline.amostra.apontamentos_ativos} apontamentos ·{' '}
+                {dados.baseline.amostra.eventos_auditoria} eventos ({dados.baseline.amostra.corte})
+              </div>
+              <div className="pt-1 border-t border-slate-200">
+                <div className="font-semibold text-slate-700 mb-1">Limitações</div>
+                <ul className="list-disc list-inside text-slate-500 space-y-0.5">
+                  {dados.baseline.limitacoes.map((l, idx) => (
+                    <li key={idx}>{l}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Lista de projetos */}
         <div className="p-4 rounded-xl bg-white border border-slate-200">
           <div className="flex items-center justify-between mb-3">

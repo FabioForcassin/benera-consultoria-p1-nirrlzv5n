@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-23T13:35:39.546Z",
+  "generatedAt": "2026-10-23T18:04:47.243Z",
   "collections": [
     {
       "name": "users",
@@ -29,21 +29,31 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "role",
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["admin", "lider", "consultor", "revisor"]
+          "selectValues": [
+            "admin",
+            "lider",
+            "consultor",
+            "revisor"
+          ]
         }
       ],
       "indexes": [
@@ -73,7 +83,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["admin", "lider", "consultor", "revisor"]
+          "selectValues": [
+            "admin",
+            "lider",
+            "consultor",
+            "revisor"
+          ]
         },
         {
           "name": "token_hash",
@@ -105,14 +120,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -149,7 +169,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["admin", "lider", "consultor", "revisor"]
+          "selectValues": [
+            "admin",
+            "lider",
+            "consultor",
+            "revisor"
+          ]
         },
         {
           "name": "granted_by",
@@ -163,14 +188,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -231,7 +261,9 @@
             "workspace_updated",
             "workspace_archived",
             "entrega_registered",
-            "workspace_completado"
+            "workspace_completado",
+            "apontamento_created",
+            "apontamento_archived"
           ]
         },
         {
@@ -258,14 +290,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -302,17 +339,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_service_types_name ON service_types (name)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_service_types_name ON service_types (name)"
+      ]
     },
     {
       "name": "clients",
@@ -355,17 +399,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_clients_name ON clients (name)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_clients_name ON clients (name)"
+      ]
     },
     {
       "name": "projects",
@@ -441,14 +492,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "kickoff_date",
@@ -475,7 +531,9 @@
           "system": false
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_projects_key ON projects (project_key)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_projects_key ON projects (project_key)"
+      ]
     },
     {
       "name": "pipeline_stages",
@@ -523,14 +581,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -585,17 +648,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_pipeline_version ON pipeline_versions (version)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_pipeline_version ON pipeline_versions (version)"
+      ]
     },
     {
       "name": "priorities",
@@ -637,17 +707,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_priorities_value ON priorities (value)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_priorities_value ON priorities (value)"
+      ]
     },
     {
       "name": "tasks",
@@ -715,14 +792,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "bloqueio_motivo",
@@ -808,17 +890,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_taskitem_task ON task_items (task_id)"]
+      "indexes": [
+        "CREATE INDEX idx_taskitem_task ON task_items (task_id)"
+      ]
     },
     {
       "name": "handoffs",
@@ -868,14 +957,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -966,14 +1060,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "origem_pendente",
@@ -985,6 +1084,85 @@
       "indexes": [
         "CREATE INDEX idx_ws_project ON workspace_items (project_key)",
         "CREATE INDEX idx_ws_tipo ON workspace_items (tipo)"
+      ]
+    },
+    {
+      "name": "apontamentos",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "project_key",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "minutos",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "motivo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "etapa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "actor_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "actor_email",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "active",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_ap_project ON apontamentos (project_key)",
+        "CREATE INDEX idx_ap_actor ON apontamentos (actor_id)"
       ]
     }
   ]
