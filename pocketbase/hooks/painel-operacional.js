@@ -137,8 +137,14 @@ routerAdd(
       const fimStr = ultimoEventoPorProjeto[key] || criadoStr
       let cicloDias = 0
       try {
-        const t1 = new Date(criadoStr.replace(' ', 'T') + 'Z').getTime()
-        const t2 = new Date(fimStr.replace(' ', 'T') + 'Z').getTime()
+        // normaliza "2026-10-06 10:00:00.000Z" → ISO válido (evita 'ZZ' que quebra o parse)
+        const norm = (s) => {
+          let x = s.replace(' ', 'T')
+          if (x.charAt(x.length - 1) === 'Z') x = x.slice(0, -1)
+          return x + 'Z'
+        }
+        const t1 = new Date(norm(criadoStr)).getTime()
+        const t2 = new Date(norm(fimStr)).getTime()
         if (!isNaN(t1) && !isNaN(t2) && t2 >= t1) {
           cicloDias = Math.round(((t2 - t1) / 86400000) * 10) / 10
         }
