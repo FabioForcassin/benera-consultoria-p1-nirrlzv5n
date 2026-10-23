@@ -14,6 +14,7 @@ import {
   Settings,
   Bell,
   Sparkles,
+  BarChart3,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { BeneraLogo } from '@/components/BeneraLogo'
@@ -87,6 +88,18 @@ export default function Dashboard() {
               <Link to="/fila">
                 <ListFilter className="w-3.5 h-3.5" />
                 <span>Minha fila</span>
+              </Link>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="text-xs font-semibold border-slate-200 text-slate-700 hover:text-[#0B3556] hover:bg-slate-50 gap-1.5"
+            >
+              <Link to="/painel">
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Painel operacional</span>
               </Link>
             </Button>
 
