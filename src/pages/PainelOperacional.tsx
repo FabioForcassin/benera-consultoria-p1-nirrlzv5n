@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select'
 import pb from '@/lib/pocketbase/client'
 
-const VERSAO_BUILD = 'v0.0.56'
+const VERSAO_BUILD = 'v0.0.57'
 
 interface Agg {
   name: string
