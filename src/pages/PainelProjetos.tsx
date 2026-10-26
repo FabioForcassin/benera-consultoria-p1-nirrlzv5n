@@ -660,7 +660,9 @@ export default function PainelProjetos() {
       const put = await fetch(s.uploadUrl, {
         method: 'PUT',
         body: upArquivo,
-        headers: { 'Content-Length': String(upArquivo.size) },
+        headers: {
+          'Content-Range': `bytes 0-${upArquivo.size - 1}/${upArquivo.size}`,
+        },
       })
       if (!put.ok) {
         setUpMsg({ ok: false, text: 'Falha no envio do arquivo (HTTP ' + put.status + ').' })
