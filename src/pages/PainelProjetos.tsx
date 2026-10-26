@@ -2861,6 +2861,7 @@ export default function PainelProjetos() {
                                       setSpAberto(false)
                                       setSpCaminho('')
                                       setSpMsg(null)
+                                      setWsEditando(null)
                                     }}
                                   >
                                     Cancelar
@@ -2909,7 +2910,13 @@ export default function PainelProjetos() {
                                       variant="outline"
                                       className="text-[10px] h-6 px-2 gap-1"
                                       disabled={spCarregando}
-                                      onClick={() => void abrirSpPicker(item.id)}
+                                      onClick={() => {
+                                        setWsEditando(item.id)
+                                        setWsEditTitulo(item.titulo)
+                                        setWsEditConteudo(item.conteudo)
+                                        setWsEditOrigem(item.origem_url)
+                                        void abrirSpPicker(item.id)
+                                      }}
                                     >
                                       <FolderKanban className="w-3 h-3" /> Vincular do SharePoint
                                     </Button>
