@@ -169,12 +169,12 @@ routerAdd(
       if (res.statusCode >= 400) {
         let msg = 'Graph HTTP ' + res.statusCode
         try {
-          const j = JSON.parse(res.body)
+          const j = res.json || {}
           if (j && j.error && j.error.message) msg = j.error.message
         } catch (_) {}
         return { status: res.statusCode, data: null, erro: msg }
       }
-      return { status: 200, data: JSON.parse(res.body) }
+      return { status: 200, data: res.json || {} }
     }
 
     // --- listar ou buscar ---
