@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import pb from '@/lib/pocketbase/client'
 
-const VERSAO_BUILD = 'v0.0.64'
+const VERSAO_BUILD = 'v0.0.69'
 
 interface ItemSP {
   nome: string
