@@ -278,6 +278,11 @@ export default function PainelProjetos() {
   const [spAtual, setSpAtual] = useState('')
   const [spBusca, setSpBusca] = useState('')
 
+  // T2.4 — upload auditado para a pasta do projeto (destino = sp_folder, sem escolha)
+  const [upArquivo, setUpArquivo] = useState<File | null>(null)
+  const [upCarregando, setUpCarregando] = useState(false)
+  const [upMsg, setUpMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
   // Apontamentos (T1.13) — seção no cartão 360
   const [aps, setAps] = useState<Apontamentos | null>(null)
   const [apMinutos, setApMinutos] = useState('')
@@ -632,6 +637,53 @@ export default function PainelProjetos() {
       })
     } finally {
       setSpCarregando(false)
+    }
+  }
+
+  // T2.4 — upload auditado: destino é SEMPRE a pasta mapeada do projeto (regra do dono)
+  const enviarSharePoint = async () => {
+    if (!cartao || !upArquivo) return
+    setUpCarregando(true)
+    setUpMsg(null)
+    try {
+      const s = (await pb.send('/backend/v1/projects/' + cartao.project_key + '/sharepoint-upload', {
+        method: 'POST',
+        body: JSON.stringify({ nome: upArquivo.name, tamanho: upArquivo.size }),
+      })) as { item_id?: string; uploadUrl?: string; aviso?: string }
+      if (s.aviso || !s.uploadUrl || !s.item_id) {
+        setUpMsg({ ok: false, text: s.aviso || 'Não foi possível iniciar o upload.' })
+        return
+      }
+      const put = await fetch(s.uploadUrl, {
+        method: 'PUT',
+        body: upArquivo,
+        headers: { 'Content-Length': String(upArquivo.size) },
+      })
+      if (!put.ok) {
+        setUpMsg({ ok: false, text: 'Falha no envio do arquivo (HTTP ' + put.status + ').' })
+        return
+      }
+      const f = (await pb.send(
+        '/backend/v1/projects/' + cartao.project_key + '/sharepoint-upload-finalizar',
+        {
+          method: 'POST',
+          body: JSON.stringify({ item_id: s.item_id }),
+        },
+      )) as { ok?: boolean; aviso?: string }
+      if (f.aviso || !f.ok) {
+        setUpMsg({ ok: false, text: f.aviso || 'Falha ao finalizar o upload.' })
+        return
+      }
+      setUpMsg({ ok: true, text: 'Arquivo enviado para a pasta do projeto e registrado na auditoria.' })
+      setUpArquivo(null)
+      await carregarWorkspace(cartao.project_key)
+    } catch (err) {
+      setUpMsg({
+        ok: false,
+        text: (err as { response?: { message?: string } })?.response?.message || 'Falha no upload.',
+      })
+    } finally {
+      setUpCarregando(false)
     }
   }
 
@@ -2653,6 +2705,44 @@ export default function PainelProjetos() {
                               placeholder="Ex.: SharePoint, Drive, link manual"
                               className="h-9 text-sm"
                             />
+                          </div>
+                          <div className="space-y-1.5 md:col-span-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                            <Label className="text-xs font-semibold text-indigo-800">
+                              Ou envie o arquivo direto para a pasta do projeto no SharePoint
+                            </Label>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <input
+                                type="file"
+                                className="text-xs"
+                                onChange={(e) => setUpArquivo(e.target.files?.[0] || null)}
+                              />
+                              <Button
+                                size="sm"
+                                className="text-xs gap-1.5"
+                                disabled={upCarregando || !upArquivo}
+                                onClick={() => void enviarSharePoint()}
+                              >
+                                {upCarregando ? 'Enviando...' : 'Enviar'}
+                              </Button>
+                              {upArquivo && (
+                                <span className="text-[10px] text-slate-500">
+                                  {upArquivo.name} ({Math.round(upArquivo.size / 1024)} KB) → pasta
+                                  mapeada do projeto
+                                </span>
+                              )}
+                            </div>
+                            {upMsg && (
+                              <div
+                                className={`text-xs ${upMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}
+                              >
+                                {upMsg.text}
+                              </div>
+                            )}
+                            <div className="text-[10px] text-indigo-600">
+                              Destino fixo: a pasta mapeada pelo admin. Máx. 10 MB. O item nasce
+                              vinculado e auditado (workspace_upload).
+                            </div>
+                          </div>
                           </div>
                         </>
                       )}
