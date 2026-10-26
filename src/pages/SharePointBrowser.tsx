@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Folder, FileText, Search, RefreshCw, ExternalLink, ChevronRight } from 'lucide-react'
+import {
+  Folder,
+  FileText,
+  Search,
+  RefreshCw,
+  ExternalLink,
+  ChevronRight,
+  FolderOpen,
+} from 'lucide-react'
 import { BeneraLogo } from '@/components/BeneraLogo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import pb from '@/lib/pocketbase/client'
 
-const VERSAO_BUILD = 'v0.0.69'
+const VERSAO_BUILD = 'v0.0.71'
 
 interface ItemSP {
   nome: string
@@ -15,6 +23,14 @@ interface ItemSP {
   modificado: string
   caminho: string
   webUrl: string
+}
+
+interface RespSP {
+  itens: ItemSP[]
+  aviso?: string
+  total: number
+  escopo?: boolean
+  escopos?: string[]
 }
 
 const fmtTam = (b: number) =>
@@ -33,6 +49,8 @@ export default function SharePointBrowser() {
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
   const [aviso, setAviso] = useState('')
+  const [escopo, setEscopo] = useState(false)
+  const [escopos, setEscopos] = useState<string[]>([])
 
   const carregar = async (novoCaminho: string, novaBusca = '') => {
     setCarregando(true)
@@ -45,9 +63,16 @@ export default function SharePointBrowser() {
       const qs = params.toString()
       const d = (await pb.send('/backend/v1/sharepoint/listar' + (qs ? '?' + qs : ''), {
         method: 'GET',
-      })) as { itens: ItemSP[]; aviso?: string; total: number }
+      })) as RespSP
       setItens(d.itens || [])
       if (d.aviso) setAviso(d.aviso)
+      if (d.escopo) {
+        setEscopo(true)
+        setEscopos(d.escopos || [])
+      } else {
+        setEscopo(false)
+        setEscopos([])
+      }
     } catch (err) {
       const msg = (err as { response?: { message?: string } })?.response?.message || ''
       setErro(msg || 'Não foi possível listar o SharePoint.')
@@ -83,44 +108,78 @@ export default function SharePointBrowser() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Breadcrumb */}
-        <div className="p-3 rounded-xl bg-white border border-slate-200 mb-4 flex items-center gap-1 flex-wrap text-xs">
-          <button
-            className={`px-2 py-1 rounded ${caminho === '' ? 'font-semibold text-[#0B3556]' : 'text-slate-500 hover:bg-slate-50'}`}
-            onClick={() => {
-              setCaminho('')
-              setBusca('')
-              void carregar('')
-            }}
-          >
-            Raiz
-          </button>
-          {partes.map((p, i) => {
-            const alvo = partes.slice(0, i + 1).join('/')
-            return (
-              <span key={alvo} className="flex items-center gap-1">
-                <ChevronRight className="w-3 h-3 text-slate-300" />
+        {/* Escopo do consultor: menu dos projetos com pasta mapeada */}
+        {escopo && escopos.length > 0 && (
+          <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 mb-4">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700 mb-2">
+              Seus projetos no SharePoint
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {escopos.map((p) => (
                 <button
-                  className={`px-2 py-1 rounded ${i === partes.length - 1 ? 'font-semibold text-[#0B3556]' : 'text-slate-500 hover:bg-slate-50'}`}
+                  key={p}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                    caminho === p || caminho.startsWith(p + '/')
+                      ? 'bg-[#3317DD] text-white border-[#3317DD]'
+                      : 'bg-white text-[#0B3556] border-slate-200 hover:border-[#3317DD]'
+                  }`}
                   onClick={() => {
-                    setCaminho(alvo)
+                    setCaminho(p)
                     setBusca('')
-                    void carregar(alvo)
+                    void carregar(p)
                   }}
                 >
-                  {p}
+                  <FolderOpen className="w-3.5 h-3.5" /> {p}
                 </button>
-              </span>
-            )
-          })}
-        </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Breadcrumb (admin/líder: raiz da biblioteca; consultor: dentro da pasta do projeto) */}
+        {!escopo && (
+          <div className="p-3 rounded-xl bg-white border border-slate-200 mb-4 flex items-center gap-1 flex-wrap text-xs">
+            <button
+              className={`px-2 py-1 rounded ${caminho === '' ? 'font-semibold text-[#0B3556]' : 'text-slate-500 hover:bg-slate-50'}`}
+              onClick={() => {
+                setCaminho('')
+                setBusca('')
+                void carregar('')
+              }}
+            >
+              Raiz
+            </button>
+            {partes.map((p, i) => {
+              const alvo = partes.slice(0, i + 1).join('/')
+              return (
+                <span key={alvo} className="flex items-center gap-1">
+                  <ChevronRight className="w-3 h-3 text-slate-300" />
+                  <button
+                    className={`px-2 py-1 rounded ${i === partes.length - 1 ? 'font-semibold text-[#0B3556]' : 'text-slate-500 hover:bg-slate-50'}`}
+                    onClick={() => {
+                      setCaminho(alvo)
+                      setBusca('')
+                      void carregar(alvo)
+                    }}
+                  >
+                    {p}
+                  </button>
+                </span>
+              )
+            })}
+          </div>
+        )}
 
         {/* Busca */}
         <div className="p-3 rounded-xl bg-white border border-slate-200 mb-4 flex items-center gap-2">
           <Input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por nome em toda a biblioteca..."
+            placeholder={
+              escopo
+                ? 'Buscar dentro dos seus projetos...'
+                : 'Buscar por nome em toda a biblioteca...'
+            }
             className="h-9 text-sm"
             onKeyDown={(e) => {
               if (e.key === 'Enter') void carregar(caminho, busca)
@@ -228,8 +287,9 @@ export default function SharePointBrowser() {
         </div>
 
         <p className="mt-4 text-[11px] text-slate-400">
-          Navegação server-side — a credencial do SharePoint nunca chega ao navegador. Consultas
-          auditadas (sharepoint_consulta).
+          {escopo
+            ? 'Escopo restrito às pastas dos seus projetos — navegação e busca server-side, auditadas (sharepoint_consulta).'
+            : 'Navegação server-side — a credencial do SharePoint nunca chega ao navegador. Consultas auditadas (sharepoint_consulta).'}
         </p>
       </main>
     </div>

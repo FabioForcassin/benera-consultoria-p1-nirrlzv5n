@@ -1,15 +1,18 @@
-// T2.2 — Navegador de arquivos do SharePoint (CA-2-005..008).
+// T2.2b — Navegador de arquivos do SharePoint COM ESCOPO POR PROJETO (CA-2-009..012).
 // GET /backend/v1/sharepoint/listar?caminho=...&busca=... — tudo SERVER-SIDE:
 // o token Graph vive na coleção ms_tokens (regras nulas) + secret SHAREPOINT_REFRESH_TOKEN
 // e NUNCA aparece em código, log ou resposta (CA-2-008).
 // LIÇÃO JSVM: top-level declarations não são visíveis dentro do callback — TODA a
 // lógica (constantes, auditoria, token, Graph) vive INLINE no corpo da rota.
-// Permissão (CA-2-007): admin/líder qualquer; consultor/revisor com ≥1 vínculo ativo
-// em project_members; sem vínculo → 403 auditado (access_denied).
+// Regra do dono (26/10/2026): admin/líder = biblioteca inteira; consultor/revisor =
+// SOMENTE as pastas dos projetos em que está alocado (projects.sp_folder).
+// - Consultor sem vínculo → 403 auditado.
+// - Consultor com vínculos mas nenhum projeto com sp_folder → 403 auditado
+//   ("nenhum projeto seu tem pasta mapeada").
+// - Consultor: raiz da resposta = menu dos projetos dele (escopo:true); caminho
+//   fora do escopo → 403 auditado; busca filtrada ao escopo (CA-2-012).
 // Sanitização: caminho com ".." ou começando com "/" → 400.
-// Busca: Graph search por nome, devolvendo caminho completo (CA-2-006).
 // Cada consulta auditada como sharepoint_consulta (ator, modo, nº de itens).
-// Erro do Graph → mensagem visível sem stack; caminho inexistente → 404 limpo.
 routerAdd(
   'GET',
   '/backend/v1/sharepoint/listar',
@@ -26,34 +29,63 @@ routerAdd(
     const ESCOPO =
       'https://graph.microsoft.com/Sites.Read.All https://graph.microsoft.com/Files.ReadWrite https://graph.microsoft.com/Sites.ReadWrite.All offline_access'
 
-    const audit = (action, detail) => {
+    const audit = (action, detail, pk) => {
       try {
         const col = $app.findCollectionByNameOrId('audit_log')
         const log = new Record(col)
         log.set('actor_id', auth.id)
         log.set('actor_email', auth.getString('email'))
         log.set('action', action)
-        log.set('project_key', '')
+        log.set('project_key', pk || '')
         log.set('detail', String(detail).slice(0, 500))
         $app.save(log)
       } catch (_) {}
     }
 
-    // --- permissão ---
+    // --- permissão + escopo ---
     const papel = auth.getString('role')
     const podeGlobal = papel === 'admin' || papel === 'lider'
+    let escopos = [] // pastas permitidas p/ consultor/revisor
     if (!podeGlobal) {
       const vinculos = $app.findRecordsByFilter(
         'project_members',
-        'user_id = {:uid}',
+        'user_id = {:uid} && project_key != ""',
         '-created',
-        1,
+        100,
         0,
         { uid: auth.id },
       )
       if (vinculos.length === 0) {
-        audit('access_denied', 'navegador SharePoint sem vínculo a nenhum projeto')
+        audit('access_denied', 'navegador SharePoint sem vínculo a nenhum projeto', '')
         return e.forbiddenError('Você não tem vínculo com nenhum projeto.')
+      }
+      // resolve a pasta de cada projeto vinculado (sp_folder)
+      const chaves = []
+      for (const v of vinculos) {
+        const k = v.getString('project_key')
+        if (chaves.indexOf(k) < 0) chaves.push(k)
+      }
+      for (const k of chaves) {
+        let p = null
+        try {
+          p = $app.findFirstRecordByData('projects', 'project_key', k)
+        } catch (_) {
+          p = null
+        }
+        if (p) {
+          const pasta = p.getString('sp_folder').trim()
+          if (pasta) escopos.push(pasta)
+        }
+      }
+      if (escopos.length === 0) {
+        audit(
+          'access_denied',
+          'navegador SharePoint: nenhum projeto vinculado tem pasta mapeada (sp_folder)',
+          '',
+        )
+        return e.forbiddenError(
+          'Nenhum dos seus projetos tem pasta mapeada no SharePoint. Solicite ao líder.',
+        )
       }
     }
 
@@ -74,8 +106,21 @@ routerAdd(
 
     // --- sanitização de caminho ---
     if (caminho.indexOf('..') >= 0 || (caminho && caminho.charAt(0) === '/')) {
-      audit('access_denied', 'caminho inválido no navegador SharePoint: ' + caminho.slice(0, 80))
+      audit(
+        'access_denied',
+        'caminho inválido no navegador SharePoint: ' + caminho.slice(0, 80),
+        '',
+      )
       throw new BadRequestError('Caminho inválido.')
+    }
+
+    // --- controle de escopo do caminho (consultor/revisor) ---
+    if (!podeGlobal && caminho) {
+      const dentro = escopos.some((p) => caminho === p || caminho.indexOf(p + '/') === 0)
+      if (!dentro) {
+        audit('access_denied', 'navegador SharePoint fora do escopo: ' + caminho.slice(0, 80), '')
+        return e.forbiddenError('Esta pasta está fora do escopo dos seus projetos.')
+      }
     }
 
     // --- token corrente (ms_tokens) com renovação via secret ---
@@ -116,7 +161,7 @@ routerAdd(
           timeout: 30,
         })
       } catch (errT) {
-        audit('sharepoint_consulta', 'renovação de token falhou (transporte)')
+        audit('sharepoint_consulta', 'renovação de token falhou (transporte)', '')
         return e.json(200, {
           itens: [],
           modo: 'listar',
@@ -124,7 +169,7 @@ routerAdd(
         })
       }
       if (res.statusCode !== 200) {
-        audit('sharepoint_consulta', 'renovação de token falhou: HTTP ' + res.statusCode)
+        audit('sharepoint_consulta', 'renovação de token falhou: HTTP ' + res.statusCode, '')
         return e.json(200, {
           itens: [],
           modo: 'listar',
@@ -186,24 +231,31 @@ routerAdd(
       const q = busca.replace(/'/g, "''")
       const r = graphGet(
         '/drives/' + SITE_DRIVE_ID + "/root/search(q='" + encodeURIComponent(q) + "')",
-        '$select=name,webUrl,folder,file,size,lastModifiedDateTime,parentReference&$top=50',
+        '$select=name,webUrl,folder,file,size,lastModifiedDateTime,parentReference&$top=200',
       )
-      // (busca via Graph search — caminho completo no resultado)
       if (r.status === 200 && r.data && r.data.value) {
         for (const i of r.data.value) {
           const parentPath = ((i.parentReference || {}).path || '').split('root:')
           const parent = parentPath.length > 1 ? parentPath[1].replace(/^\//, '') : ''
+          const caminhoCompleto = (parent ? parent + '/' : '') + i.name
+          // filtro de escopo: consultor/revisor só vê resultados dentro das pastas dele
+          if (!podeGlobal) {
+            const dentro = escopos.some(
+              (p) => caminhoCompleto === p || caminhoCompleto.indexOf(p + '/') === 0,
+            )
+            if (!dentro) continue
+          }
           itens.push({
             nome: i.name,
             pasta: !!i.folder,
             tamanho: i.size || 0,
             modificado: (i.lastModifiedDateTime || '').slice(0, 10),
-            caminho: (parent ? parent + '/' : '') + i.name,
+            caminho: caminhoCompleto,
             webUrl: i.webUrl || '',
           })
         }
       } else if (r.status !== 200) {
-        audit('sharepoint_consulta', 'busca falhou: ' + (r.erro || r.status))
+        audit('sharepoint_consulta', 'busca falhou: ' + (r.erro || r.status), '')
         return e.json(200, {
           itens: [],
           modo: modo,
@@ -217,7 +269,7 @@ routerAdd(
       const r = graphGet(base, '$select=name,webUrl,folder,file,size,lastModifiedDateTime&$top=200')
       if (r.status === 404) return e.notFoundError('Caminho não encontrado no SharePoint.')
       if (r.status !== 200) {
-        audit('sharepoint_consulta', 'listagem falhou: ' + (r.erro || r.status))
+        audit('sharepoint_consulta', 'listagem falhou: ' + (r.erro || r.status), '')
         return e.json(200, {
           itens: [],
           modo: modo,
@@ -249,6 +301,7 @@ routerAdd(
         itens.length +
         ' itens' +
         (busca ? ' — busca: ' + busca.slice(0, 60) : ''),
+      caminho ? caminho.split('/')[0] : '',
     )
     return e.json(200, {
       itens: itens,
@@ -256,6 +309,8 @@ routerAdd(
       caminho: caminho,
       busca: busca,
       total: itens.length,
+      escopo: !podeGlobal,
+      escopos: podeGlobal ? [] : escopos,
     })
   },
   $apis.requireAuth(),

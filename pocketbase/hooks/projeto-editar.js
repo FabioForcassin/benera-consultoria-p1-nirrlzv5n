@@ -24,6 +24,7 @@ routerAdd(
       due_date: '',
       stage: '',
       next_action: '',
+      sp_folder: '',
     })
     e.bindBody(data)
 
@@ -119,6 +120,17 @@ routerAdd(
       }
       mudancas.push('stage: ' + p.getString('stage') + ' → ' + novaEtapa)
       p.set('stage', novaEtapa)
+    }
+
+    // Pasta no SharePoint (T2.2b): mapeamento projeto → pasta na biblioteca BENERA CORP.
+    // Define o escopo do consultor/revisor no navegador (só pastas dos projetos alocados).
+    const novaPasta = (data.sp_folder || '').trim()
+    if (novaPasta !== p.getString('sp_folder').trim()) {
+      if (novaPasta && (novaPasta.indexOf('..') >= 0 || novaPasta.charAt(0) === '/')) {
+        throw new BadRequestError('Pasta do SharePoint inválida (caminho relativo ou absoluto).')
+      }
+      mudancas.push('sp_folder: "' + p.getString('sp_folder') + '" → "' + novaPasta + '"')
+      p.set('sp_folder', novaPasta)
     }
 
     // Próxima ação
