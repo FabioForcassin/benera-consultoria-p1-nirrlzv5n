@@ -293,6 +293,21 @@ routerAdd(
         })
       }
     } else {
+      // consultor/revisor na raiz: NÃO lista a biblioteca (anti-enumeração) —
+      // a resposta devolve só o menu dos projetos (escopos); a UI pede a escolha.
+      if (!podeGlobal && !caminho) {
+        audit('sharepoint_consulta', 'raiz — menu de escopo — ' + escopos.length + ' projetos', '')
+        return e.json(200, {
+          itens: [],
+          modo: modo,
+          caminho: '',
+          busca: '',
+          total: 0,
+          escopo: true,
+          escopos: escopos,
+          aviso: 'Selecione um dos seus projetos acima para navegar.',
+        })
+      }
       const base = caminho
         ? '/drives/' + SITE_DRIVE_ID + '/root:/' + encodeURIComponent(caminho) + ':/children'
         : '/drives/' + SITE_DRIVE_ID + '/root/children'
