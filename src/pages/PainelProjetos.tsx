@@ -646,10 +646,13 @@ export default function PainelProjetos() {
     setUpCarregando(true)
     setUpMsg(null)
     try {
-      const s = (await pb.send('/backend/v1/projects/' + cartao.project_key + '/sharepoint-upload', {
-        method: 'POST',
-        body: JSON.stringify({ nome: upArquivo.name, tamanho: upArquivo.size }),
-      })) as { item_id?: string; uploadUrl?: string; aviso?: string }
+      const s = (await pb.send(
+        '/backend/v1/projects/' + cartao.project_key + '/sharepoint-upload',
+        {
+          method: 'POST',
+          body: JSON.stringify({ nome: upArquivo.name, tamanho: upArquivo.size }),
+        },
+      )) as { item_id?: string; uploadUrl?: string; aviso?: string }
       if (s.aviso || !s.uploadUrl || !s.item_id) {
         setUpMsg({ ok: false, text: s.aviso || 'Não foi possível iniciar o upload.' })
         return
@@ -674,7 +677,10 @@ export default function PainelProjetos() {
         setUpMsg({ ok: false, text: f.aviso || 'Falha ao finalizar o upload.' })
         return
       }
-      setUpMsg({ ok: true, text: 'Arquivo enviado para a pasta do projeto e registrado na auditoria.' })
+      setUpMsg({
+        ok: true,
+        text: 'Arquivo enviado para a pasta do projeto e registrado na auditoria.',
+      })
       setUpArquivo(null)
       await carregarWorkspace(cartao.project_key)
     } catch (err) {
@@ -2742,7 +2748,6 @@ export default function PainelProjetos() {
                               Destino fixo: a pasta mapeada pelo admin. Máx. 10 MB. O item nasce
                               vinculado e auditado (workspace_upload).
                             </div>
-                          </div>
                           </div>
                         </>
                       )}
