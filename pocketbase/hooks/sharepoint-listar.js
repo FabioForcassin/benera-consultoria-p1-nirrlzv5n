@@ -226,6 +226,21 @@ routerAdd(
     // --- listar ou buscar ---
     const itens = []
     let modo = 'listar'
+    // prefixo da raiz do drive p/ derivar caminho do webUrl (Graph search NÃO devolve
+    // parentReference.path — comportamento confirmado; caminho vem do webUrl decodificado)
+    let rootPrefix = ''
+    const obterRootPrefix = () => {
+      if (rootPrefix) return rootPrefix
+      const rr = graphGet('/drives/' + SITE_DRIVE_ID + '/root', '$select=webUrl')
+      if (rr.status === 200 && rr.data && rr.data.webUrl) {
+        try {
+          rootPrefix = decodeURIComponent(rr.data.webUrl) + '/'
+        } catch (_) {
+          rootPrefix = rr.data.webUrl + '/'
+        }
+      }
+      return rootPrefix
+    }
     if (busca) {
       modo = 'buscar'
       const q = busca.replace(/'/g, "''")
@@ -235,10 +250,25 @@ routerAdd(
       )
       if (r.status === 200 && r.data && r.data.value) {
         for (const i of r.data.value) {
-          const parentPath = ((i.parentReference || {}).path || '').split('root:')
-          const parent = parentPath.length > 1 ? parentPath[1].replace(/^\//, '') : ''
-          const caminhoCompleto = (parent ? parent + '/' : '') + i.name
+          // caminho completo: parentReference.path quando existe; senão deriva do webUrl
+          let caminhoCompleto = ''
+          const pr = i.parentReference || {}
+          if (pr.path) {
+            const parentPath = pr.path.split('root:')
+            const parent = parentPath.length > 1 ? parentPath[1].replace(/^\//, '') : ''
+            caminhoCompleto = (parent ? parent + '/' : '') + i.name
+          } else if (i.webUrl) {
+            const prefixo = obterRootPrefix()
+            let dec = i.webUrl
+            try {
+              dec = decodeURIComponent(i.webUrl)
+            } catch (_) {}
+            if (prefixo && dec.indexOf(prefixo) === 0) {
+              caminhoCompleto = dec.slice(prefixo.length)
+            }
+          }
           // filtro de escopo: consultor/revisor só vê resultados dentro das pastas dele
+          // (caminho não derivável = fora, fail closed)
           if (!podeGlobal) {
             const dentro = escopos.some(
               (p) => caminhoCompleto === p || caminhoCompleto.indexOf(p + '/') === 0,
