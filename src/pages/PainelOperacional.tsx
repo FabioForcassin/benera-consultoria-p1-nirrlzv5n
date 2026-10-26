@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, RefreshCw, AlertTriangle, Ban, Archive } from 'lucide-react'
+import { BarChart3, RefreshCw, AlertTriangle, Ban, Archive, Download } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { BeneraLogo } from '@/components/BeneraLogo'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select'
 import pb from '@/lib/pocketbase/client'
 
-const VERSAO_BUILD = 'v0.0.57'
+const VERSAO_BUILD = 'v0.0.63'
 
 interface Agg {
   name: string
@@ -31,6 +31,11 @@ interface ItemPainel {
   atrasado: boolean
   bloqueado: boolean
   encerrado: boolean
+  ciclo_dias: number
+  touch_min: number
+  touch_dias: number
+  espera_dias: number
+  incompleto: boolean
 }
 interface Painel {
   totais: { ativos: number; atrasados: number; bloqueados: number; encerrados: number }
@@ -40,9 +45,22 @@ interface Painel {
   lista: ItemPainel[]
   totalLista: number
 }
+interface ExportResponse {
+  formato: string
+  linhas: number
+  gerado_em: string
+  filtros: string
+  conteudo: string
+}
+interface ConfigResponse {
+  chave: string
+  valor: number
+  descricao: string
+  updated?: string
+}
 
 export default function PainelOperacional() {
-  const { user } = useAuth()
+  const { user, isAdmin, isLider } = useAuth()
   const [dados, setDados] = useState<Painel | null>(null)
   const [opcoes, setOpcoes] = useState<{
     etapas: string[]
@@ -57,6 +75,16 @@ export default function PainelOperacional() {
   const [fEncerrados, setFEncerrados] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
+  // T1.14: exportação + config
+  const [exportando, setExportando] = useState<'' | 'csv' | 'json'>('')
+  const [hashInfo, setHashInfo] = useState<{
+    formato: string
+    linhas: number
+    hash: string
+    gerado_em: string
+  } | null>(null)
+  const [erroExport, setErroExport] = useState('')
+  const [configCorte, setConfigCorte] = useState<number | null>(null)
 
   // T1.12-fix: overrides explícitos — o setTimeout com closure antigo buscava com o
   // estado ainda vazio (filtro mudava o rótulo mas não os totais). A busca recebe o
@@ -108,9 +136,69 @@ export default function PainelOperacional() {
     }
   }
 
+  // T1.14: config do corte (admin) — exibida no painel; edição via API auditada
+  useEffect(() => {
+    if (!isAdmin) return
+    pb.send('/backend/v1/painel-config', { method: 'GET' })
+      .then((c) => setConfigCorte((c as ConfigResponse).valor))
+      .catch(() => setConfigCorte(null))
+  }, [isAdmin])
+
   useEffect(() => {
     void carregar(true)
   }, [])
+
+  // T1.14: exportação sanitizada e auditada (CA-1-034/035/036).
+  // O arquivo só é montado no navegador após a resposta 200 completa — nada parcial.
+  // Hash SHA-256 do conteúdo exibido após o download (evidência de integridade).
+  const exportar = async (formato: 'csv' | 'json') => {
+    setExportando(formato)
+    setErroExport('')
+    try {
+      const params = new URLSearchParams()
+      params.set('formato', formato)
+      if (fEtapa) params.set('etapa', fEtapa)
+      if (fPrioridade) params.set('prioridade', fPrioridade)
+      if (fOwner) params.set('owner', fOwner)
+      if (fAtraso) params.set('atraso', '1')
+      if (fBloqueio) params.set('bloqueio', '1')
+      if (fEncerrados) params.set('encerrados', '1')
+      const r = (await pb.send('/backend/v1/exportar?' + params.toString(), {
+        method: 'GET',
+      })) as ExportResponse
+      const mime = formato === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8'
+      const blob = new Blob([r.conteudo], { type: mime })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const hoje = new Date().toISOString().slice(0, 10)
+      a.href = url
+      a.download = `painel-operacional-${hoje}.${formato}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      // hash SHA-256 do conteúdo recebido
+      let hash = '—'
+      try {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(r.conteudo))
+        hash = Array.from(new Uint8Array(buf))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')
+      } catch (_) {
+        hash = 'indisponível neste navegador'
+      }
+      setHashInfo({
+        formato: r.formato,
+        linhas: r.linhas,
+        hash: hash,
+        gerado_em: r.gerado_em,
+      })
+    } catch {
+      setErroExport('Não foi possível exportar. Verifique sua permissão (somente admin/líder).')
+    } finally {
+      setExportando('')
+    }
+  }
 
   const limparFiltros = () => {
     setFEtapa('')
@@ -130,6 +218,7 @@ export default function PainelOperacional() {
   }
 
   const filtroAtivo = fEtapa || fPrioridade || fOwner || fAtraso || fBloqueio || fEncerrados
+  const podeExportar = isAdmin || isLider
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
@@ -338,10 +427,36 @@ export default function PainelOperacional() {
           ))}
         </div>
 
-        {/* Tempo e baseline (T1.13) */}
+        {/* Tempo e baseline (T1.13) + exportação (T1.14) */}
         <div className="p-4 rounded-xl bg-white border border-slate-200 mb-5">
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-3">
-            Tempo e baseline (piloto)
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+              Tempo e baseline (piloto)
+            </div>
+            {podeExportar && (
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-xs"
+                  disabled={exportando !== ''}
+                  onClick={() => void exportar('csv')}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {exportando === 'csv' ? 'Exportando...' : 'Exportar CSV'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-xs"
+                  disabled={exportando !== ''}
+                  onClick={() => void exportar('json')}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {exportando === 'json' ? 'Exportando...' : 'Exportar JSON'}
+                </Button>
+              </div>
+            )}
           </div>
           <table className="w-full text-xs mb-4">
             <thead>
@@ -384,6 +499,26 @@ export default function PainelOperacional() {
               )}
             </tbody>
           </table>
+          {hashInfo && (
+            <div className="mb-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
+              <div className="font-semibold text-emerald-800 mb-1">
+                Exportação {hashInfo.formato.toUpperCase()} concluída — {hashInfo.linhas} linhas ·
+                gerada em {hashInfo.gerado_em}
+              </div>
+              <div className="text-emerald-700 break-all">
+                <span className="font-semibold">SHA-256:</span> {hashInfo.hash}
+              </div>
+              <div className="text-emerald-600 mt-1">
+                Exportação auditada (export_realizada) · células de texto sanitizadas antes da
+                entrega.
+              </div>
+            </div>
+          )}
+          {erroExport && (
+            <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+              {erroExport}
+            </div>
+          )}
           {dados?.baseline && (
             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1.5">
               <div className="font-semibold text-[#0B3556]">{dados.baseline.tipo}</div>
@@ -396,6 +531,12 @@ export default function PainelOperacional() {
                 {dados.baseline.amostra.apontamentos_ativos} apontamentos ·{' '}
                 {dados.baseline.amostra.eventos_auditoria} eventos ({dados.baseline.amostra.corte})
               </div>
+              {isAdmin && configCorte !== null && (
+                <div className="text-slate-500">
+                  Configuração: corte da amostra = {configCorte} registros por fonte · mudança
+                  auditada e reversível (config_changed)
+                </div>
+              )}
               <div className="pt-1 border-t border-slate-200">
                 <div className="font-semibold text-slate-700 mb-1">Limitações</div>
                 <ul className="list-disc list-inside text-slate-500 space-y-0.5">
@@ -459,8 +600,9 @@ export default function PainelOperacional() {
         </div>
 
         <p className="mt-4 text-[11px] text-slate-400">
-          Métricas calculadas a partir dos eventos do piloto. Touch time, espera e ciclo entram na
-          próxima entrega (baseline). Consulta não é exportação — dados não saem daqui.
+          Métricas calculadas a partir dos eventos do piloto. Consulta e exportação são auditadas
+          (painel_consulta / export_realizada); exportação disponível para admin e líder, com
+          células sanitizadas antes da entrega.
         </p>
       </main>
     </div>

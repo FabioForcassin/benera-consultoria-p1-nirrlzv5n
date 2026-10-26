@@ -1,16 +1,18 @@
-// T1.12/T1.13 — Painel operacional: agregados filtráveis (CA-1-031) + métricas de tempo
-// e baseline (CA-1-032/033/037).
+// T1.12/T1.13/T1.14 — Painel operacional: agregados filtráveis (CA-1-031) + métricas de
+// tempo e baseline (CA-1-032/033/037) + auditoria de consulta e corte configurável (T1.14).
 // Agregados sobre o RESULTADO FILTRADO — totais sempre batem com a lista.
 // T1.13: por projeto da lista filtrada — ciclo (dias corridos, criação → último evento
 // de auditoria, BRT), touch (soma de minutos de apontamentos ATIVOS), espera
 // (ciclo − touch, piso 0), incompleto (sem apontamento → flag, nunca inventa número).
+// T1.14: CADA CONSULTA é auditada como painel_consulta (ator, filtros, nº de linhas) —
+// CA-1-036. O corte da amostra vem de painel_config.corte_eventos (antes hardcoded 500):
+// mudar a configuração muda o relatório de verdade (consultas e export).
 // BASELINE como objeto calculado: período (primeira criação → hoje), relógio
 // ("dias corridos, BRT"), amostra (projetos/apontamentos/eventos considerados, corte
-// de 500 declarado) e limitações FIXAS — incluindo a nota anti-ganho (CA-1-037):
-// "baseline é o primeiro ciclo — não é ganho; não há comparação pós-baseline".
+// configurável declarado) e limitações FIXAS — incluindo a nota anti-ganho (CA-1-037).
 // Escopo herdado da carteira: admin/líder veem tudo; consultor/revisor só com vínculo.
 // Atraso com fuso BRT (lição T1.7); bloqueio = projeto com ≥1 tarefa 'bloqueada' (T1.8).
-// Exportação sanitizada e auditoria de consulta são da T1.14. [reescrito v0.0.59]
+// [reescrito v0.0.63 — hooks exigem reescrita integral, patch não recarrega]
 routerAdd(
   'GET',
   '/backend/v1/painel',
@@ -49,6 +51,13 @@ routerAdd(
       } catch (_) {}
     }
 
+    // T1.14: corte da amostra vem da configuração (padrão se a config não existir)
+    let corte = 500
+    try {
+      const cfg = $app.findFirstRecordByData('painel_config', 'chave', 'corte_eventos')
+      corte = Math.floor(Number(cfg.get('valor')) || 500)
+    } catch (_) {}
+
     // escopo por vínculo
     let chaves = null
     if (!escopoTotal) {
@@ -57,7 +66,7 @@ routerAdd(
         'project_members',
         'user_id = {:uid}',
         '-created',
-        500,
+        corte,
         0,
         { uid: auth.id },
       )
@@ -71,7 +80,7 @@ routerAdd(
     // mapa de usuários (nome/e-mail do responsável)
     const usuarios = {}
     try {
-      const us = $app.findRecordsByFilter('_pb_users_auth_', 'id != ""', '-created', 500, 0)
+      const us = $app.findRecordsByFilter('_pb_users_auth_', 'id != ""', '-created', corte, 0)
       for (const u of us) {
         usuarios[u.id] = { email: u.getString('email'), name: u.getString('name') }
       }
@@ -80,7 +89,7 @@ routerAdd(
     // tarefas bloqueadas por projeto (T1.8)
     const bloqueadas = {}
     try {
-      const tb = $app.findRecordsByFilter('tasks', "status = 'bloqueada'", '-created', 500, 0)
+      const tb = $app.findRecordsByFilter('tasks', "status = 'bloqueada'", '-created', corte, 0)
       for (const t of tb) {
         const pk = t.getString('project_key')
         bloqueadas[pk] = (bloqueadas[pk] || 0) + 1
@@ -91,7 +100,7 @@ routerAdd(
     const touchPorProjeto = {}
     let amostraApontamentos = 0
     try {
-      const aps = $app.findRecordsByFilter('apontamentos', 'active = true', '-created', 500, 0)
+      const aps = $app.findRecordsByFilter('apontamentos', 'active = true', '-created', corte, 0)
       for (const a of aps) {
         amostraApontamentos++
         const pk = a.getString('project_key')
@@ -103,7 +112,7 @@ routerAdd(
     const ultimoEventoPorProjeto = {}
     let amostraEventos = 0
     try {
-      const evs = $app.findRecordsByFilter('audit_log', 'id != ""', '-created', 500, 0)
+      const evs = $app.findRecordsByFilter('audit_log', 'id != ""', '-created', corte, 0)
       for (const ev of evs) {
         amostraEventos++
         const pk = ev.getString('project_key')
@@ -116,7 +125,7 @@ routerAdd(
     // projetos → itens com flags + métricas de tempo
     const itens = []
     let primeiraCriacao = ''
-    const projetos = $app.findRecordsByFilter('projects', 'id != ""', '-created', 500, 0)
+    const projetos = $app.findRecordsByFilter('projects', 'id != ""', '-created', corte, 0)
     for (const p of projetos) {
       const key = p.getString('project_key')
       if (chaves && !chaves[key]) continue
@@ -227,16 +236,44 @@ routerAdd(
         projetos: itens.length,
         apontamentos_ativos: amostraApontamentos,
         eventos_auditoria: amostraEventos,
-        corte: '500 registros mais recentes por fonte',
+        corte: corte + ' registros mais recentes por fonte',
       },
       limitacoes: [
         'Baseline é o PRIMEIRO ciclo — não é ganho; não há comparação pós-baseline (CA-1-037).',
         'Touch time vem de apontamento manual (append-only, auditado) — risco de gameabilidade declarado na SPEC; eventos automáticos ficam separados.',
         'Espera = ciclo − touch (piso 0) — aproximação, não medição direta.',
-        'Amostra cortada em 500 registros mais recentes por fonte (projetos, apontamentos, eventos).',
+        'Amostra cortada em ' +
+          corte +
+          ' registros mais recentes por fonte (projetos, apontamentos, eventos).',
         'Projetos sem apontamento aparecem como incompletos — dado ausente não é zero.',
       ],
     }
+
+    // T1.14: CADA CONSULTA auditada (CA-1-036) — ator, filtros, nº de linhas
+    const filtrosTxt =
+      'etapa=' +
+      (fEtapa || '-') +
+      '; prioridade=' +
+      (fPrioridade || '-') +
+      '; owner=' +
+      (fOwner || '-') +
+      '; atraso=' +
+      (fAtraso ? 1 : 0) +
+      '; bloqueio=' +
+      (fBloqueio ? 1 : 0) +
+      '; encerrados=' +
+      (fEncerrados ? 1 : 0)
+    const auditCol = $app.findCollectionByNameOrId('audit_log')
+    const logConsulta = new Record(auditCol)
+    logConsulta.set('actor_id', auth.id)
+    logConsulta.set('actor_email', auth.getString('email'))
+    logConsulta.set('action', 'painel_consulta')
+    logConsulta.set('project_key', '')
+    logConsulta.set(
+      'detail',
+      'consulta ao painel — ' + filtrosTxt + ' — ' + itens.length + ' linhas',
+    )
+    $app.save(logConsulta)
 
     return e.json(200, {
       totais: totais,
