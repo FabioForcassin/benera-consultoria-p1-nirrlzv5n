@@ -1,4 +1,4 @@
-// T2.4 — Upload auditado para a pasta do projeto (CA-2-017..020).
+// T2.4 — Upload auditado para a pasta do projeto (CA-2-017..020). [v2 reescrita p/ re-registro]
 // Regra do dono (26/10): conexão/configuração do SharePoint = SÓ admin; o consultor
 // NUNCA escolhe rede/destino — o destino é SEMPRE a pasta mapeada no projeto
 // (projects.sp_folder). O hook nem aceita parâmetro de destino.
