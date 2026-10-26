@@ -267,6 +267,17 @@ export default function PainelProjetos() {
   const [wsEditOrigem, setWsEditOrigem] = useState('')
   const [wsFormAberto, setWsFormAberto] = useState(false)
 
+  // T2.3 — vínculo workspace ↔ SharePoint
+  const [spVinculando, setSpVinculando] = useState<string | null>(null)
+  const [spCaminho, setSpCaminho] = useState('')
+  const [spMsg, setSpMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [spCarregando, setSpCarregando] = useState(false)
+  const [spEscopos, setSpEscopos] = useState<string[]>([])
+  const [spItens, setSpItens] = useState<{ nome: string; caminho: string; pasta: boolean }[]>([])
+  const [spAberto, setSpAberto] = useState(false)
+  const [spAtual, setSpAtual] = useState('')
+  const [spBusca, setSpBusca] = useState('')
+
   // Apontamentos (T1.13) — seção no cartão 360
   const [aps, setAps] = useState<Apontamentos | null>(null)
   const [apMinutos, setApMinutos] = useState('')
@@ -542,6 +553,85 @@ export default function PainelProjetos() {
       setWsMsg({ ok: false, text: translateAuthError(err) })
     } finally {
       setCarregando(false)
+    }
+  }
+
+  // T2.3 — vínculo workspace ↔ SharePoint (escopo T2.2b aplicado server-side)
+  const abrirSpPicker = async (itemId: string) => {
+    setSpVinculando(itemId)
+    setSpCaminho('')
+    setSpMsg(null)
+    setSpAberto(false)
+    setSpAtual('')
+    setSpItens([])
+    try {
+      const d = (await pb.send('/backend/v1/sharepoint/listar', { method: 'GET' })) as {
+        escopo?: boolean
+        escopos?: string[]
+      }
+      if (d.escopo) {
+        setSpEscopos(d.escopos || [])
+      } else {
+        setSpEscopos([])
+        setSpAberto(true)
+        await navegarSp('')
+      }
+    } catch {
+      setSpMsg({ ok: false, text: 'Não foi possível abrir o navegador do SharePoint.' })
+    }
+  }
+
+  const navegarSp = async (caminho: string, busca = '') => {
+    setSpCarregando(true)
+    try {
+      const params = new URLSearchParams()
+      if (caminho) params.set('caminho', caminho)
+      if (busca) params.set('busca', busca)
+      const qs = params.toString()
+      const d = (await pb.send('/backend/v1/sharepoint/listar' + (qs ? '?' + qs : ''), {
+        method: 'GET',
+      })) as {
+        itens: { nome: string; caminho: string; pasta: boolean }[]
+        aviso?: string
+      }
+      setSpItens(d.itens || [])
+      setSpAtual(caminho)
+      setSpAberto(true)
+    } catch (err) {
+      setSpMsg({
+        ok: false,
+        text: (err as { response?: { message?: string } })?.response?.message || 'Falha ao listar.',
+      })
+    } finally {
+      setSpCarregando(false)
+    }
+  }
+
+  const vincularSharePoint = async (item: WorkspaceItem) => {
+    if (!cartao || !spVinculando) return
+    if (!spCaminho) {
+      setSpMsg({ ok: false, text: 'Selecione um arquivo no navegador.' })
+      return
+    }
+    setSpCarregando(true)
+    setSpMsg(null)
+    try {
+      await pb.send('/backend/v1/workspace/' + item.id + '/vincular-sharepoint', {
+        method: 'POST',
+        body: JSON.stringify({ caminho: spCaminho }),
+      })
+      setSpMsg({ ok: true, text: 'Vínculo criado — origem completada (SharePoint).' })
+      setSpVinculando(null)
+      setSpAberto(false)
+      await carregarWorkspace(cartao.project_key)
+    } catch (err) {
+      setSpMsg({
+        ok: false,
+        text:
+          (err as { response?: { message?: string } })?.response?.message || 'Falha no vínculo.',
+      })
+    } finally {
+      setSpCarregando(false)
     }
   }
 
@@ -2648,6 +2738,136 @@ export default function PainelProjetos() {
                                 className="h-9 text-sm"
                               />
                             )}
+                            {item.tipo === 'documento' && !item.sp_caminho && (
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-[10px] h-6 px-2 gap-1"
+                                  onClick={() => void abrirSpPicker(item.id)}
+                                >
+                                  <FolderKanban className="w-3 h-3" /> Vincular do SharePoint
+                                </Button>
+                              </div>
+                            )}
+                            {spVinculando === item.id && (
+                              <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 space-y-2">
+                                <div className="text-[10px] font-semibold uppercase tracking-wider text-indigo-700">
+                                  Escolher arquivo no SharePoint
+                                </div>
+                                {spEscopos.length > 0 && !spAberto && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {spEscopos.map((p) => (
+                                      <Button
+                                        key={p}
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-[10px] h-6 px-2"
+                                        onClick={() => void navegarSp(p)}
+                                      >
+                                        {p}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                )}
+                                {spAberto && (
+                                  <>
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        className="text-[10px] text-indigo-700 underline"
+                                        onClick={() => {
+                                          const pai = spAtual.includes('/')
+                                            ? spAtual.slice(0, spAtual.lastIndexOf('/'))
+                                            : ''
+                                          void navegarSp(pai)
+                                        }}
+                                        disabled={!spAtual}
+                                      >
+                                        ← voltar
+                                      </button>
+                                      <span className="text-[10px] text-slate-500 truncate">
+                                        {spAtual || 'raiz'}
+                                      </span>
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto space-y-1">
+                                      {spItens.map((f) =>
+                                        f.pasta ? (
+                                          <button
+                                            key={f.caminho}
+                                            className="block w-full text-left text-[11px] px-2 py-1 rounded hover:bg-white text-[#0B3556]"
+                                            onClick={() => void navegarSp(f.caminho)}
+                                          >
+                                            📁 {f.nome}
+                                          </button>
+                                        ) : (
+                                          <button
+                                            key={f.caminho}
+                                            className={`block w-full text-left text-[11px] px-2 py-1 rounded ${
+                                              spCaminho === f.caminho
+                                                ? 'bg-[#3317DD] text-white'
+                                                : 'hover:bg-white text-slate-700'
+                                            }`}
+                                            onClick={() => setSpCaminho(f.caminho)}
+                                          >
+                                            📄 {f.nome}
+                                          </button>
+                                        ),
+                                      )}
+                                      {!spCarregando && spItens.length === 0 && (
+                                        <div className="text-[10px] text-slate-400 px-2">
+                                          Nenhum item.
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Input
+                                        value={spBusca}
+                                        onChange={(e) => setSpBusca(e.target.value)}
+                                        placeholder="Buscar por nome..."
+                                        className="h-7 text-[11px]"
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') void navegarSp(spAtual, spBusca)
+                                        }}
+                                      />
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-[10px] h-7 px-2"
+                                        onClick={() => void navegarSp(spAtual, spBusca)}
+                                      >
+                                        Buscar
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-slate-500 truncate flex-1">
+                                    {spCaminho || 'nenhum arquivo selecionado'}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    className="text-[10px] h-6 px-2"
+                                    disabled={spCarregando || !spCaminho}
+                                    onClick={() => void vincularSharePoint(item)}
+                                  >
+                                    Vincular
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-[10px] h-6 px-2"
+                                    onClick={() => {
+                                      setSpVinculando(null)
+                                      setSpAberto(false)
+                                      setSpCaminho('')
+                                      setSpMsg(null)
+                                    }}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                             <div className="flex gap-2">
                               <Button
                                 onClick={() => void editarWorkspaceItem(item)}
@@ -2680,8 +2900,24 @@ export default function PainelProjetos() {
                                   </div>
                                 )}
                                 {item.tipo === 'documento' && item.origem_pendente && (
-                                  <div className="mt-1 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                                    ORIGEM PENDENTE — registro manual, sem integração automática
+                                  <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                    <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                                      ORIGEM PENDENTE — registro manual, sem integração automática
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-[10px] h-6 px-2 gap-1"
+                                      disabled={spCarregando}
+                                      onClick={() => void abrirSpPicker(item.id)}
+                                    >
+                                      <FolderKanban className="w-3 h-3" /> Vincular do SharePoint
+                                    </Button>
+                                  </div>
+                                )}
+                                {item.sp_caminho && (
+                                  <div className="mt-1 inline-flex items-center rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                    SharePoint: {item.sp_caminho}
                                   </div>
                                 )}
                                 {item.origem_url && (

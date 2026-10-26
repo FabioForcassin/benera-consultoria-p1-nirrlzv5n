@@ -65,6 +65,8 @@ routerAdd(
         origem_url: it.getString('origem_url'),
         origem_tipo: it.getString('origem_tipo'),
         origem_pendente: it.getBool('origem_pendente'),
+        sp_caminho: it.getString('sp_caminho'),
+        sp_weburl: it.getString('sp_weburl'),
         destinatario: it.getString('destinatario'),
         data_entrega: it.getDateTime('data_entrega').string().slice(0, 10),
         entregue_por: it.getString('entregue_por'),
