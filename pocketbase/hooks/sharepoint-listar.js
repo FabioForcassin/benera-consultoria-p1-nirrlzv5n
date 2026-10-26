@@ -131,7 +131,8 @@ routerAdd(
           aviso: 'Credencial do SharePoint precisa de renovação (HTTP ' + res.statusCode + ').',
         })
       }
-      const tok = JSON.parse(res.body)
+      // res.body é bytes no JSVM — usar res.json (já parseado)
+      const tok = res.json || {}
       if (!tok.access_token) throw new BadRequestError('Resposta OAuth sem access_token.')
       token = tok.access_token
       if (rec) {
@@ -187,6 +188,7 @@ routerAdd(
         '/drives/' + SITE_DRIVE_ID + "/root/search(q='" + encodeURIComponent(q) + "')",
         '$select=name,webUrl,folder,file,size,lastModifiedDateTime,parentReference&$top=50',
       )
+      // (busca via Graph search — caminho completo no resultado)
       if (r.status === 200 && r.data && r.data.value) {
         for (const i of r.data.value) {
           const parentPath = ((i.parentReference || {}).path || '').split('root:')
