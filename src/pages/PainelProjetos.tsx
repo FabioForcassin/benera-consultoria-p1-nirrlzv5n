@@ -221,6 +221,10 @@ export default function PainelProjetos() {
   const [cartaoAberto, setCartaoAberto] = useState<Projeto | null>(null)
   // T3.1 — ref do conteúdo do cartão (é ele que rola: max-h-[90vh] overflow-y-auto)
   const cartaoScrollRef = useRef<HTMLDivElement | null>(null)
+  // T3.1 — foco de seção: os atalhos do topo escondem os blocos anteriores
+  // (o cartão é longo: Mover etapa + Editar projeto + Tarefas empurravam o
+  // Workspace/Transcrições para fora da tela, e o dialog não rola por script)
+  const [secaoFoco, setSecaoFoco] = useState('tudo')
   const [cartao, setCartao] = useState<Cartao | null>(null)
   const [timeline, setTimeline] = useState<EventoTimeline[]>([])
   const [editPrioridade, setEditPrioridade] = useState('')
@@ -2193,14 +2197,14 @@ export default function PainelProjetos() {
                   de um cartão longo e passava despercebido. Rola até a seção. */}
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  ['cartao-tarefas', 'Tarefas (' + tarefas.length + ')'],
-                  ['cartao-workspace', 'Workspace' + (ws ? ' (' + ws.total + ')' : '')],
-                  ['cartao-timeline', 'Timeline'],
+                  ['cartao-workspace', 'Ir para Workspace' + (ws ? ' (' + ws.total + ')' : '')],
+                  ['cartao-timeline', 'Ir para Timeline'],
                 ].map(([id, rotulo]) => (
                   <button
                     key={id}
                     className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-xs font-medium text-[#0B3556]"
                     onClick={() => {
+                      setSecaoFoco(secaoFoco === id ? 'tudo' : id)
                       const el = document.getElementById(id)
                       if (!el) return
                       // o modal tem scroll próprio: acha o ancestral rolável e ajusta o scrollTop
@@ -2261,437 +2265,459 @@ export default function PainelProjetos() {
                 </div>
               )}
 
-              {/* Mover etapa (todos com acesso ao projeto) — motor da T1.5 pela tela */}
-              {cartao.active && (
-                <div className="p-4 rounded-xl border border-slate-200 space-y-3">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                    Mover etapa
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-slate-600">Destino</Label>
-                      <Select value={transicaoDestino} onValueChange={setTransicaoDestino}>
-                        <SelectTrigger className="w-full h-10 text-sm">
-                          <SelectValue placeholder="Selecione a etapa destino" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {etapasEsteira
-                            .filter((s) => s.name !== cartao.stage)
-                            .map((s) => (
-                              <SelectItem key={s.id} value={s.name}>
-                                {s.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-slate-600">
-                        Data de kick-off (se o destino exigir)
-                      </Label>
-                      <Input
-                        type="date"
-                        value={kickoffInput}
-                        onChange={(e) => setKickoffInput(e.target.value)}
-                        className="h-10 text-sm"
-                      />
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => void fazerTransicao()}
-                    disabled={carregando || !transicaoDestino}
-                    className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
-                  >
-                    <ArrowRight className="w-4 h-4" />
-                    Mover para a etapa
-                  </Button>
-                </div>
-              )}
-
-              {/* Edição (admin/líder) */}
-              {podeCadastrar && (
-                <div className="p-4 rounded-xl border border-slate-200 space-y-3">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                    Editar projeto
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-slate-600">Prioridade</Label>
-                      <Select value={editPrioridade} onValueChange={setEditPrioridade}>
-                        <SelectTrigger className="w-full h-10 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {prioridades.map((p) => (
-                            <SelectItem key={p.id} value={p.value}>
-                              {p.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-slate-600">Prazo</Label>
-                      <Input
-                        type="date"
-                        value={editPrazo}
-                        onChange={(e) => setEditPrazo(e.target.value)}
-                        className="h-10 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-slate-600">Responsável</Label>
-                      <Select value={editOwner} onValueChange={setEditOwner}>
-                        <SelectTrigger className="w-full h-10 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {usuarios.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.name || u.email} ({u.role})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-slate-600">Próxima ação</Label>
-                      <Input
-                        value={editAcao}
-                        onChange={(e) => setEditAcao(e.target.value)}
-                        className="h-10 text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => void salvarEdicao()}
-                      disabled={carregando}
-                      className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      Salvar alterações
-                    </Button>
-                    {cartao.active && (
+              {secaoFoco === 'tudo' && (
+                <>
+                  {/* Mover etapa (todos com acesso ao projeto) — motor da T1.5 pela tela */}
+                  {cartao.active && (
+                    <div className="p-4 rounded-xl border border-slate-200 space-y-3">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                        Mover etapa
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-slate-600">Destino</Label>
+                          <Select value={transicaoDestino} onValueChange={setTransicaoDestino}>
+                            <SelectTrigger className="w-full h-10 text-sm">
+                              <SelectValue placeholder="Selecione a etapa destino" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {etapasEsteira
+                                .filter((s) => s.name !== cartao.stage)
+                                .map((s) => (
+                                  <SelectItem key={s.id} value={s.name}>
+                                    {s.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-slate-600">
+                            Data de kick-off (se o destino exigir)
+                          </Label>
+                          <Input
+                            type="date"
+                            value={kickoffInput}
+                            onChange={(e) => setKickoffInput(e.target.value)}
+                            className="h-10 text-sm"
+                          />
+                        </div>
+                      </div>
                       <Button
-                        onClick={() => void inativar()}
-                        disabled={carregando}
-                        variant="outline"
-                        className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={() => void fazerTransicao()}
+                        disabled={carregando || !transicaoDestino}
+                        className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
                       >
-                        <Archive className="w-4 h-4" />
-                        Inativar projeto
+                        <ArrowRight className="w-4 h-4" />
+                        Mover para a etapa
                       </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Tarefas (T1.7) */}
-              <div id="cartao-tarefas" className="p-4 rounded-xl border border-slate-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                    Tarefas ({tarefas.length}){' '}
-                  </div>
-                  <Button
-                    onClick={() => setNovaTarefaAberta(!novaTarefaAberta)}
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-xs h-7"
-                  >
-                    <FolderPlus className="w-3.5 h-3.5" />
-                    {novaTarefaAberta ? 'Cancelar' : 'Nova tarefa'}
-                  </Button>
-                </div>
-
-                {novaTarefaAberta && (
-                  <div className="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label className="text-xs text-slate-600">Título *</Label>
-                        <Input
-                          value={tTitulo}
-                          onChange={(e) => setTTitulo(e.target.value)}
-                          placeholder="Ex.: Consolidar contexto"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label className="text-xs text-slate-600">Descrição</Label>
-                        <Input
-                          value={tDescricao}
-                          onChange={(e) => setTDescricao(e.target.value)}
-                          placeholder="Detalhe opcional"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs text-slate-600">Responsável *</Label>
-                        <Select value={tAssignee} onValueChange={setTAssignee}>
-                          <SelectTrigger className="w-full h-9 text-sm">
-                            <SelectValue placeholder="Quem executa" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {usuarios
-                              .filter((u) => u.role !== 'revisor')
-                              .map((u) => (
-                                <SelectItem key={u.id} value={u.id}>
-                                  {u.name || u.email}
-                                  {u.role === 'consultor' ? ' (consultor)' : ''}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs text-slate-600">Prazo *</Label>
-                        <Input
-                          type="date"
-                          value={tPrazo}
-                          onChange={(e) => setTPrazo(e.target.value)}
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label className="text-xs text-slate-600">Evidência esperada *</Label>
-                        <Input
-                          value={tEvidencia}
-                          onChange={(e) => setTEvidencia(e.target.value)}
-                          placeholder="Ex.: planilha consolidada revisada"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label className="text-xs text-slate-600">
-                          Checklist (1 item por linha — linhas com * são obrigatórias)
-                        </Label>
-                        <textarea
-                          value={tItens}
-                          onChange={(e) => setTItens(e.target.value)}
-                          rows={3}
-                          placeholder={'Coletar base\n*Validar com o cliente'}
-                          className="w-full text-sm rounded-md border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      onClick={() => void criarTarefa()}
-                      disabled={tCarregando}
-                      className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
-                    >
-                      {tCarregando ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4" />
-                      )}
-                      Criar tarefa
-                    </Button>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {tarefas.map((t) => (
-                    <div
-                      key={t.id}
-                      className={`p-3 rounded-lg border bg-white ${
-                        t.status === 'bloqueada' ? 'border-red-300' : 'border-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-[#0B3556] flex items-center gap-2 flex-wrap">
-                            {t.titulo}
-                            {t.status === 'concluida' && (
-                              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-medium">
-                                concluída
-                              </span>
-                            )}
-                            {t.status === 'bloqueada' && (
-                              <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium">
-                                bloqueada
-                              </span>
-                            )}
-                            {t.status === 'pendente' && (
-                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">
-                                pendente
-                              </span>
-                            )}
-                            {t.atrasada && (
-                              <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium">
-                                atrasada
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-slate-500 mt-0.5">
-                            {t.evidencia_esperada && <>Evidência: {t.evidencia_esperada} · </>}
-                            Prazo: {t.due_date}
-                          </div>
-                          {t.status === 'bloqueada' && (
-                            <div className="text-xs text-red-700 mt-1">
-                              Bloqueio: {t.bloqueio_motivo} · Dono: {t.bloqueio_dono} · Revisão:{' '}
-                              {t.bloqueio_revisao}
-                            </div>
-                          )}
-                          {t.retorno_motivo && (
-                            <div className="text-xs text-amber-700 mt-1">
-                              Devolvida p/ correção: {t.retorno_motivo}
-                            </div>
-                          )}
-                        </div>
-                        <div className="shrink-0 flex flex-col items-end gap-1.5">
-                          <div className="flex gap-1.5">
-                            {t.status === 'pendente' && (
-                              <>
-                                <Button
-                                  onClick={() => void concluirTarefa(t)}
-                                  disabled={tCarregando}
-                                  size="sm"
-                                  className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Concluir
-                                </Button>
-                                <Button
-                                  onClick={() =>
-                                    setBloqueioAberto(bloqueioAberto === t.id ? null : t.id)
-                                  }
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1.5 text-xs h-7 text-red-600 border-red-200 hover:bg-red-50"
-                                >
-                                  <Ban className="w-3.5 h-3.5" />
-                                  Bloquear
-                                </Button>
-                              </>
-                            )}
-                            {t.status === 'bloqueada' && (
-                              <Button
-                                onClick={() => void liberarTarefa(t)}
-                                disabled={tCarregando}
-                                size="sm"
-                                variant="outline"
-                                className="text-xs h-7"
-                              >
-                                Liberar bloqueio
-                              </Button>
-                            )}
-                            {t.status === 'concluida' && (
-                              <Button
-                                onClick={() =>
-                                  setRetornoAberto(retornoAberto === t.id ? null : t.id)
-                                }
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 text-xs h-7"
-                              >
-                                Devolver p/ correção
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {bloqueioAberto === t.id && (
-                        <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 space-y-2">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-slate-600">Motivo do bloqueio *</Label>
-                            <Input
-                              value={bMotivo}
-                              onChange={(e) => setBMotivo(e.target.value)}
-                              placeholder="Ex.: aguardando acesso à base do cliente"
-                              className="h-9 text-sm"
-                            />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs text-slate-600">
-                                Dono do desbloqueio *
-                              </Label>
-                              <Input
-                                value={bDono}
-                                onChange={(e) => setBDono(e.target.value)}
-                                placeholder="Quem resolve"
-                                className="h-9 text-sm"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs text-slate-600">Data de revisão *</Label>
-                              <Input
-                                type="date"
-                                value={bRevisao}
-                                onChange={(e) => setBRevisao(e.target.value)}
-                                className="h-9 text-sm"
-                              />
-                            </div>
-                          </div>
-                          <Button
-                            onClick={() => void bloquearTarefa(t)}
-                            disabled={tCarregando}
-                            className="gap-2 bg-red-600 hover:bg-red-700 text-white"
-                            size="sm"
-                          >
-                            <Ban className="w-4 h-4" />
-                            Confirmar bloqueio
-                          </Button>
-                        </div>
-                      )}
-
-                      {retornoAberto === t.id && (
-                        <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-2">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs text-slate-600">Motivo da devolução *</Label>
-                            <Input
-                              value={rMotivo}
-                              onChange={(e) => setRMotivo(e.target.value)}
-                              placeholder="Ex.: evidência não mostra a validação do cliente"
-                              className="h-9 text-sm"
-                            />
-                          </div>
-                          <Button
-                            onClick={() => void devolverTarefa(t)}
-                            disabled={tCarregando}
-                            className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
-                            size="sm"
-                          >
-                            Confirmar devolução
-                          </Button>
-                        </div>
-                      )}
-
-                      {t.itens.length > 0 && (
-                        <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
-                          {t.itens.map((it) => (
-                            <label
-                              key={it.id}
-                              className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={it.concluido}
-                                onChange={(e) => void marcarItem(t, it, e.target.checked)}
-                                className="w-3.5 h-3.5"
-                              />
-                              <span className={it.concluido ? 'line-through text-slate-400' : ''}>
-                                {it.titulo}
-                              </span>
-                              {it.obrigatorio && (
-                                <span className="text-[10px] text-slate-400">(obrigatório)</span>
-                              )}
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {tarefas.length === 0 && !novaTarefaAberta && (
-                    <div className="text-xs text-slate-400">
-                      Nenhuma tarefa. Use "Nova tarefa" para criar a primeira.
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* Workspace (T1.10) */}
+                  {/* Edição (admin/líder) */}
+                  {podeCadastrar && (
+                    <div className="p-4 rounded-xl border border-slate-200 space-y-3">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                        Editar projeto
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-slate-600">Prioridade</Label>
+                          <Select value={editPrioridade} onValueChange={setEditPrioridade}>
+                            <SelectTrigger className="w-full h-10 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {prioridades.map((p) => (
+                                <SelectItem key={p.id} value={p.value}>
+                                  {p.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-slate-600">Prazo</Label>
+                          <Input
+                            type="date"
+                            value={editPrazo}
+                            onChange={(e) => setEditPrazo(e.target.value)}
+                            className="h-10 text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-slate-600">Responsável</Label>
+                          <Select value={editOwner} onValueChange={setEditOwner}>
+                            <SelectTrigger className="w-full h-10 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {usuarios.map((u) => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  {u.name || u.email} ({u.role})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-slate-600">Próxima ação</Label>
+                          <Input
+                            value={editAcao}
+                            onChange={(e) => setEditAcao(e.target.value)}
+                            className="h-10 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => void salvarEdicao()}
+                          disabled={carregando}
+                          className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          Salvar alterações
+                        </Button>
+                        {cartao.active && (
+                          <Button
+                            onClick={() => void inativar()}
+                            disabled={carregando}
+                            variant="outline"
+                            className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                          >
+                            <Archive className="w-4 h-4" />
+                            Inativar projeto
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tarefas (T1.7) */}
+                  <div id="cartao-tarefas" className="p-4 rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                        Tarefas ({tarefas.length}){' '}
+                      </div>
+                      <Button
+                        onClick={() => setNovaTarefaAberta(!novaTarefaAberta)}
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs h-7"
+                      >
+                        <FolderPlus className="w-3.5 h-3.5" />
+                        {novaTarefaAberta ? 'Cancelar' : 'Nova tarefa'}
+                      </Button>
+                    </div>
+
+                    {novaTarefaAberta && (
+                      <div className="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1.5 md:col-span-2">
+                            <Label className="text-xs text-slate-600">Título *</Label>
+                            <Input
+                              value={tTitulo}
+                              onChange={(e) => setTTitulo(e.target.value)}
+                              placeholder="Ex.: Consolidar contexto"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5 md:col-span-2">
+                            <Label className="text-xs text-slate-600">Descrição</Label>
+                            <Input
+                              value={tDescricao}
+                              onChange={(e) => setTDescricao(e.target.value)}
+                              placeholder="Detalhe opcional"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-600">Responsável *</Label>
+                            <Select value={tAssignee} onValueChange={setTAssignee}>
+                              <SelectTrigger className="w-full h-9 text-sm">
+                                <SelectValue placeholder="Quem executa" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {usuarios
+                                  .filter((u) => u.role !== 'revisor')
+                                  .map((u) => (
+                                    <SelectItem key={u.id} value={u.id}>
+                                      {u.name || u.email}
+                                      {u.role === 'consultor' ? ' (consultor)' : ''}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-600">Prazo *</Label>
+                            <Input
+                              type="date"
+                              value={tPrazo}
+                              onChange={(e) => setTPrazo(e.target.value)}
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5 md:col-span-2">
+                            <Label className="text-xs text-slate-600">Evidência esperada *</Label>
+                            <Input
+                              value={tEvidencia}
+                              onChange={(e) => setTEvidencia(e.target.value)}
+                              placeholder="Ex.: planilha consolidada revisada"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5 md:col-span-2">
+                            <Label className="text-xs text-slate-600">
+                              Checklist (1 item por linha — linhas com * são obrigatórias)
+                            </Label>
+                            <textarea
+                              value={tItens}
+                              onChange={(e) => setTItens(e.target.value)}
+                              rows={3}
+                              placeholder={'Coletar base\n*Validar com o cliente'}
+                              className="w-full text-sm rounded-md border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => void criarTarefa()}
+                          disabled={tCarregando}
+                          className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                        >
+                          {tCarregando ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4" />
+                          )}
+                          Criar tarefa
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      {tarefas.map((t) => (
+                        <div
+                          key={t.id}
+                          className={`p-3 rounded-lg border bg-white ${
+                            t.status === 'bloqueada' ? 'border-red-300' : 'border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-[#0B3556] flex items-center gap-2 flex-wrap">
+                                {t.titulo}
+                                {t.status === 'concluida' && (
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-medium">
+                                    concluída
+                                  </span>
+                                )}
+                                {t.status === 'bloqueada' && (
+                                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium">
+                                    bloqueada
+                                  </span>
+                                )}
+                                {t.status === 'pendente' && (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium">
+                                    pendente
+                                  </span>
+                                )}
+                                {t.atrasada && (
+                                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-medium">
+                                    atrasada
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {t.evidencia_esperada && <>Evidência: {t.evidencia_esperada} · </>}
+                                Prazo: {t.due_date}
+                              </div>
+                              {t.status === 'bloqueada' && (
+                                <div className="text-xs text-red-700 mt-1">
+                                  Bloqueio: {t.bloqueio_motivo} · Dono: {t.bloqueio_dono} · Revisão:{' '}
+                                  {t.bloqueio_revisao}
+                                </div>
+                              )}
+                              {t.retorno_motivo && (
+                                <div className="text-xs text-amber-700 mt-1">
+                                  Devolvida p/ correção: {t.retorno_motivo}
+                                </div>
+                              )}
+                            </div>
+                            <div className="shrink-0 flex flex-col items-end gap-1.5">
+                              <div className="flex gap-1.5">
+                                {t.status === 'pendente' && (
+                                  <>
+                                    <Button
+                                      onClick={() => void concluirTarefa(t)}
+                                      disabled={tCarregando}
+                                      size="sm"
+                                      className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      Concluir
+                                    </Button>
+                                    <Button
+                                      onClick={() =>
+                                        setBloqueioAberto(bloqueioAberto === t.id ? null : t.id)
+                                      }
+                                      size="sm"
+                                      variant="outline"
+                                      className="gap-1.5 text-xs h-7 text-red-600 border-red-200 hover:bg-red-50"
+                                    >
+                                      <Ban className="w-3.5 h-3.5" />
+                                      Bloquear
+                                    </Button>
+                                  </>
+                                )}
+                                {t.status === 'bloqueada' && (
+                                  <Button
+                                    onClick={() => void liberarTarefa(t)}
+                                    disabled={tCarregando}
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-xs h-7"
+                                  >
+                                    Liberar bloqueio
+                                  </Button>
+                                )}
+                                {t.status === 'concluida' && (
+                                  <Button
+                                    onClick={() =>
+                                      setRetornoAberto(retornoAberto === t.id ? null : t.id)
+                                    }
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 text-xs h-7"
+                                  >
+                                    Devolver p/ correção
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {bloqueioAberto === t.id && (
+                            <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200 space-y-2">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-slate-600">
+                                  Motivo do bloqueio *
+                                </Label>
+                                <Input
+                                  value={bMotivo}
+                                  onChange={(e) => setBMotivo(e.target.value)}
+                                  placeholder="Ex.: aguardando acesso à base do cliente"
+                                  className="h-9 text-sm"
+                                />
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-slate-600">
+                                    Dono do desbloqueio *
+                                  </Label>
+                                  <Input
+                                    value={bDono}
+                                    onChange={(e) => setBDono(e.target.value)}
+                                    placeholder="Quem resolve"
+                                    className="h-9 text-sm"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-slate-600">
+                                    Data de revisão *
+                                  </Label>
+                                  <Input
+                                    type="date"
+                                    value={bRevisao}
+                                    onChange={(e) => setBRevisao(e.target.value)}
+                                    className="h-9 text-sm"
+                                  />
+                                </div>
+                              </div>
+                              <Button
+                                onClick={() => void bloquearTarefa(t)}
+                                disabled={tCarregando}
+                                className="gap-2 bg-red-600 hover:bg-red-700 text-white"
+                                size="sm"
+                              >
+                                <Ban className="w-4 h-4" />
+                                Confirmar bloqueio
+                              </Button>
+                            </div>
+                          )}
+
+                          {retornoAberto === t.id && (
+                            <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-2">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-slate-600">
+                                  Motivo da devolução *
+                                </Label>
+                                <Input
+                                  value={rMotivo}
+                                  onChange={(e) => setRMotivo(e.target.value)}
+                                  placeholder="Ex.: evidência não mostra a validação do cliente"
+                                  className="h-9 text-sm"
+                                />
+                              </div>
+                              <Button
+                                onClick={() => void devolverTarefa(t)}
+                                disabled={tCarregando}
+                                className="gap-2 bg-[#0B3556] hover:bg-[#1B5E8A] text-white"
+                                size="sm"
+                              >
+                                Confirmar devolução
+                              </Button>
+                            </div>
+                          )}
+
+                          {t.itens.length > 0 && (
+                            <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                              {t.itens.map((it) => (
+                                <label
+                                  key={it.id}
+                                  className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={it.concluido}
+                                    onChange={(e) => void marcarItem(t, it, e.target.checked)}
+                                    className="w-3.5 h-3.5"
+                                  />
+                                  <span
+                                    className={it.concluido ? 'line-through text-slate-400' : ''}
+                                  >
+                                    {it.titulo}
+                                  </span>
+                                  {it.obrigatorio && (
+                                    <span className="text-[10px] text-slate-400">
+                                      (obrigatório)
+                                    </span>
+                                  )}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {tarefas.length === 0 && !novaTarefaAberta && (
+                        <div className="text-xs text-slate-400">
+                          Nenhuma tarefa. Use "Nova tarefa" para criar a primeira.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Workspace (T1.10) */}
+                </>
+              )}
+              {secaoFoco !== 'tudo' && (
+                <button
+                  className="text-[11px] text-slate-500 underline"
+                  onClick={() => setSecaoFoco('tudo')}
+                >
+                  ← mostrar o cartão completo
+                </button>
+              )}
               <div id="cartao-workspace" className="p-4 rounded-xl border border-slate-200 mb-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
