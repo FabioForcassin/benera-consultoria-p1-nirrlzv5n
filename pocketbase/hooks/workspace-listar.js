@@ -91,6 +91,7 @@ routerAdd(
     }
 
     return e.json(200, {
+      versao: 'v84b',
       notas: notas,
       comentarios: comentarios,
       documentos: documentos,
