@@ -294,6 +294,10 @@ export default function PainelProjetos() {
   const [upCarregando, setUpCarregando] = useState(false)
   const [upMsg, setUpMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  // T3.2 — análise IA da transcrição
+  const [anCarregando, setAnCarregando] = useState<string | null>(null)
+  const [anAberto, setAnAberto] = useState<string | null>(null)
+
   // Apontamentos (T1.13) — seção no cartão 360
   const [aps, setAps] = useState<Apontamentos | null>(null)
   const [apMinutos, setApMinutos] = useState('')
@@ -703,6 +707,24 @@ export default function PainelProjetos() {
       })
     } finally {
       setUpCarregando(false)
+    }
+  }
+
+  // T3.2 — dispara a análise IA server-side da transcrição
+  const analisarTranscricao = async (item: WorkspaceItem) => {
+    if (!cartao) return
+    setAnCarregando(item.id)
+    try {
+      await pb.send('/backend/v1/workspace/' + item.id + '/analisar', { method: 'POST' })
+      await carregarWorkspace(cartao.project_key)
+    } catch (err) {
+      setWsMsg({
+        ok: false,
+        text:
+          (err as { response?: { message?: string } })?.response?.message || 'Falha na análise.',
+      })
+    } finally {
+      setAnCarregando(null)
     }
   }
 
@@ -3043,6 +3065,139 @@ export default function PainelProjetos() {
                                     SharePoint: {item.sp_caminho}
                                   </div>
                                 )}
+                                {item.tipo === 'transcricao' && (
+                                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-[10px] h-6 px-2 gap-1"
+                                      disabled={anCarregando === item.id}
+                                      onClick={() => void analisarTranscricao(item)}
+                                    >
+                                      {anCarregando === item.id
+                                        ? 'Analisando...'
+                                        : item.an_status === 'pronto'
+                                          ? 'Re-analisar'
+                                          : 'Analisar com IA'}
+                                    </Button>
+                                    {item.an_status === 'pronto' && (
+                                      <button
+                                        className="text-[10px] font-semibold text-[#0B3556] underline"
+                                        onClick={() =>
+                                          setAnAberto(anAberto === item.id ? null : item.id)
+                                        }
+                                      >
+                                        {anAberto === item.id ? 'ocultar análise' : 'ver análise'}
+                                      </button>
+                                    )}
+                                    {item.an_status === 'erro' && (
+                                      <span className="text-[10px] font-semibold text-red-600">
+                                        análise falhou — tente de novo
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {item.tipo === 'transcricao' &&
+                                  anAberto === item.id &&
+                                  item.an_status === 'pronto' && (
+                                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                      <div>
+                                        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                          Resumo executivo
+                                        </div>
+                                        <div className="text-xs text-slate-700 whitespace-pre-wrap">
+                                          {item.an_resumo}
+                                        </div>
+                                      </div>
+                                      {(() => {
+                                        const dec = (() => {
+                                          try {
+                                            return JSON.parse(item.an_decisoes || '[]')
+                                          } catch {
+                                            return []
+                                          }
+                                        })()
+                                        const com = (() => {
+                                          try {
+                                            return JSON.parse(item.an_compromissos || '[]')
+                                          } catch {
+                                            return []
+                                          }
+                                        })()
+                                        const ris = (() => {
+                                          try {
+                                            return JSON.parse(item.an_riscos || '[]')
+                                          } catch {
+                                            return []
+                                          }
+                                        })()
+                                        const pro = (() => {
+                                          try {
+                                            return JSON.parse(item.an_proximos || '[]')
+                                          } catch {
+                                            return []
+                                          }
+                                        })()
+                                        return (
+                                          <>
+                                            {dec.length > 0 && (
+                                              <div>
+                                                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                                  Decisões ({dec.length})
+                                                </div>
+                                                <ul className="list-disc pl-4 text-xs text-slate-700">
+                                                  {dec.map((x: string, k: number) => (
+                                                    <li key={k}>{x}</li>
+                                                  ))}
+                                                </ul>
+                                              </div>
+                                            )}
+                                            {com.length > 0 && (
+                                              <div>
+                                                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                                  Compromissos ({com.length})
+                                                </div>
+                                                <ul className="list-disc pl-4 text-xs text-slate-700">
+                                                  {com.map((x: string, k: number) => (
+                                                    <li key={k}>{x}</li>
+                                                  ))}
+                                                </ul>
+                                              </div>
+                                            )}
+                                            {ris.length > 0 && (
+                                              <div>
+                                                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                                  Riscos ({ris.length})
+                                                </div>
+                                                <ul className="list-disc pl-4 text-xs text-slate-700">
+                                                  {ris.map((x: string, k: number) => (
+                                                    <li key={k}>{x}</li>
+                                                  ))}
+                                                </ul>
+                                              </div>
+                                            )}
+                                            {pro.length > 0 && (
+                                              <div>
+                                                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                                  Próximos passos ({pro.length})
+                                                </div>
+                                                <ul className="list-disc pl-4 text-xs text-slate-700">
+                                                  {pro.map((x: string, k: number) => (
+                                                    <li key={k}>{x}</li>
+                                                  ))}
+                                                </ul>
+                                              </div>
+                                            )}
+                                          </>
+                                        )
+                                      })()}
+                                      {item.an_criado_em && (
+                                        <div className="text-[10px] text-slate-400">
+                                          análise {item.an_modelo} · {item.an_criado_em}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 {item.origem_url && (
                                   <div className="text-xs text-slate-500 mt-1">
                                     Origem:{' '}
