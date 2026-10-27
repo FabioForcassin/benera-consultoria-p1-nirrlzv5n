@@ -2785,6 +2785,7 @@ export default function PainelProjetos() {
                             <SelectItem value="nota">Nota interna</SelectItem>
                             <SelectItem value="comentario">Comentário</SelectItem>
                             <SelectItem value="documento">Documento/Link</SelectItem>
+                            <SelectItem value="transcricao">Transcrição de reunião</SelectItem>
                             <SelectItem value="entrega">Entrega</SelectItem>
                           </SelectContent>
                         </Select>
@@ -2798,14 +2799,24 @@ export default function PainelProjetos() {
                           className="h-9 text-sm"
                         />
                       </div>
-                      {(wsTipo === 'nota' || wsTipo === 'comentario') && (
+                      {(wsTipo === 'nota' ||
+                        wsTipo === 'comentario' ||
+                        wsTipo === 'transcricao') && (
                         <div className="space-y-1.5 md:col-span-2">
-                          <Label className="text-xs text-slate-600">Conteúdo *</Label>
+                          <Label className="text-xs text-slate-600">
+                            {wsTipo === 'transcricao'
+                              ? 'Texto da transcrição * (cole aqui o conteúdo da reunião)'
+                              : 'Conteúdo *'}
+                          </Label>
                           <textarea
                             value={wsConteudo}
                             onChange={(e) => setWsConteudo(e.target.value)}
-                            rows={3}
-                            placeholder="Escreva aqui..."
+                            rows={wsTipo === 'transcricao' ? 10 : 3}
+                            placeholder={
+                              wsTipo === 'transcricao'
+                                ? 'Cole aqui o texto da transcrição da reunião (mín. 50 caracteres)...'
+                                : 'Escreva aqui...'
+                            }
                             className="w-full text-sm rounded-md border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300"
                           />
                         </div>
@@ -2915,7 +2926,9 @@ export default function PainelProjetos() {
                           ? 'comentário'
                           : wsTipo === 'documento'
                             ? 'documento'
-                            : 'entrega'}
+                            : wsTipo === 'transcricao'
+                              ? 'transcrição'
+                              : 'entrega'}
                     </Button>
                   </div>
                 )}
