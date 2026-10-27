@@ -2229,7 +2229,10 @@ export default function PainelProjetos() {
                         window.scrollTo({ top: topo, behavior: 'smooth' })
                         try {
                           el.scrollIntoView({ block: 'start' })
-                        } catch (_) {}
+                        } catch (erroScroll) {
+                          // Radix pode bloquear — a rolagem da janela acima já resolveu
+                          void erroScroll
+                        }
                       }
                     }}
                   >
