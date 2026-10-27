@@ -3129,7 +3129,9 @@ export default function PainelProjetos() {
                                 <div className="text-sm font-semibold text-[#0B3556]">
                                   {item.titulo}
                                 </div>
-                                {item.conteudo && (
+                                {/* T3.2 UX: em transcrição, o texto bruto vem DEPOIS da análise
+                                    e recolhido — antes ele empurrava a análise para fora da tela */}
+                                {item.conteudo && item.tipo !== 'transcricao' && (
                                   <div className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">
                                     {item.conteudo}
                                   </div>
@@ -3194,7 +3196,8 @@ export default function PainelProjetos() {
                                   </div>
                                 )}
                                 {item.tipo === 'transcricao' &&
-                                  anAberto === item.id &&
+                                  (anAberto === item.id ||
+                                    (anAberto === null && item.an_status === 'pronto')) &&
                                   item.an_status === 'pronto' && (
                                     <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
                                       <div>
@@ -3294,6 +3297,16 @@ export default function PainelProjetos() {
                                       )}
                                     </div>
                                   )}
+                                {item.tipo === 'transcricao' && item.conteudo && (
+                                  <details className="mt-2">
+                                    <summary className="text-[10px] text-slate-500 cursor-pointer select-none">
+                                      ver o texto da transcrição ({item.conteudo.length} caracteres)
+                                    </summary>
+                                    <div className="mt-1 max-h-64 overflow-y-auto rounded border border-slate-200 bg-white p-2 text-[11px] text-slate-600 whitespace-pre-wrap">
+                                      {item.conteudo}
+                                    </div>
+                                  </details>
+                                )}{' '}
                                 {item.origem_url && (
                                   <div className="text-xs text-slate-500 mt-1">
                                     Origem:{' '}
