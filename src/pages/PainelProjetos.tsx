@@ -2187,6 +2187,27 @@ export default function PainelProjetos() {
                 </div>
               </div>
 
+              {/* T3.1 — atalhos de seção: o Workspace (Transcrições/Docs) ficava no fim
+                  de um cartão longo e passava despercebido. Rola até a seção. */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  ['cartao-tarefas', 'Tarefas (' + tarefas.length + ')'],
+                  ['cartao-workspace', 'Workspace' + (ws ? ' (' + ws.total + ')' : '')],
+                  ['cartao-timeline', 'Timeline'],
+                ].map(([id, rotulo]) => (
+                  <button
+                    key={id}
+                    className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-xs font-medium text-[#0B3556]"
+                    onClick={() => {
+                      const el = document.getElementById(id)
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+
               {editMsg && (
                 <div
                   className={`p-3.5 rounded-lg flex items-start gap-3 text-sm ${
@@ -2331,10 +2352,10 @@ export default function PainelProjetos() {
               )}
 
               {/* Tarefas (T1.7) */}
-              <div className="p-4 rounded-xl border border-slate-200">
+              <div id="cartao-tarefas" className="p-4 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-                    Tarefas ({tarefas.length})
+                    Tarefas ({tarefas.length}){' '}
                   </div>
                   <Button
                     onClick={() => setNovaTarefaAberta(!novaTarefaAberta)}
@@ -2635,7 +2656,7 @@ export default function PainelProjetos() {
               </div>
 
               {/* Workspace (T1.10) */}
-              <div className="p-4 rounded-xl border border-slate-200 mb-4">
+              <div id="cartao-workspace" className="p-4 rounded-xl border border-slate-200 mb-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-700">
                     Workspace {ws ? `(${ws.total})` : ''}
@@ -3360,7 +3381,7 @@ export default function PainelProjetos() {
               </div>
 
               {/* Timeline (auditoria) */}
-              <div className="p-4 rounded-xl border border-slate-200">
+              <div id="cartao-timeline" className="p-4 rounded-xl border border-slate-200">
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-3">
                   Histórico (auditoria)
                 </div>
