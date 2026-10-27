@@ -1,7 +1,8 @@
-// T1.10/T1.11 — Listar itens de workspace do projeto com escopo por vínculo (padrão da carteira):
+// T1.10/T1.11/T3.1 — Listar itens de workspace do projeto com escopo por vínculo:
 // admin/líder veem tudo; consultor/revisor só projetos com vínculo (senão 403 auditado).
-// Retorna itens ATIVOS agrupados por tipo (nota/comentario/documento/entrega),
-// com origem_pendente para o fallback manual (CA-1-030). [reescrito v0.0.54]
+// Retorna itens ATIVOS agrupados por tipo (nota/comentario/documento/entrega/transcricao),
+// com origem_pendente (CA-1-030) e campos da análise IA (T3.1/T3.2).
+// [reescrito v0.0.84 p/ forçar re-registro do hook — lição T1.8/T2.4]
 routerAdd(
   'GET',
   '/backend/v1/projects/{key}/workspace',
