@@ -2200,7 +2200,31 @@ export default function PainelProjetos() {
                     className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-xs font-medium text-[#0B3556]"
                     onClick={() => {
                       const el = document.getElementById(id)
-                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      if (!el) return
+                      // o modal tem scroll próprio: acha o ancestral rolável e ajusta o scrollTop
+                      let pai: HTMLElement | null = el.parentElement
+                      let rolavel: HTMLElement | null = null
+                      while (pai) {
+                        const st = window.getComputedStyle(pai)
+                        if (
+                          (st.overflowY === 'auto' || st.overflowY === 'scroll') &&
+                          pai.scrollHeight > pai.clientHeight
+                        ) {
+                          rolavel = pai
+                          break
+                        }
+                        pai = pai.parentElement
+                      }
+                      if (rolavel) {
+                        const delta =
+                          el.getBoundingClientRect().top - rolavel.getBoundingClientRect().top
+                        rolavel.scrollTo({
+                          top: rolavel.scrollTop + delta - 12,
+                          behavior: 'smooth',
+                        })
+                      } else {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }
                     }}
                   >
                     {rotulo}
