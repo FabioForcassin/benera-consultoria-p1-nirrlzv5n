@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Building2,
@@ -219,6 +219,8 @@ export default function PainelProjetos() {
 
   // Cartão 360
   const [cartaoAberto, setCartaoAberto] = useState<Projeto | null>(null)
+  // T3.1 — ref do conteúdo do cartão (é ele que rola: max-h-[90vh] overflow-y-auto)
+  const cartaoScrollRef = useRef<HTMLDivElement | null>(null)
   const [cartao, setCartao] = useState<Cartao | null>(null)
   const [timeline, setTimeline] = useState<EventoTimeline[]>([])
   const [editPrioridade, setEditPrioridade] = useState('')
@@ -2150,7 +2152,7 @@ export default function PainelProjetos() {
 
       {/* Cartão 360 (dialog) */}
       <Dialog open={!!cartaoAberto} onOpenChange={(open) => !open && setCartaoAberto(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent ref={cartaoScrollRef} className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-[#0B3556] flex items-center gap-2">
               <Pencil className="w-5 h-5 text-[#C9A24B]" />
@@ -2215,6 +2217,7 @@ export default function PainelProjetos() {
                         }
                         pai = pai.parentElement
                       }
+                      if (!rolavel && cartaoScrollRef.current) rolavel = cartaoScrollRef.current
                       if (rolavel) {
                         const delta =
                           el.getBoundingClientRect().top - rolavel.getBoundingClientRect().top
