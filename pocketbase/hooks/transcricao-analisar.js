@@ -144,6 +144,12 @@ routerAdd(
         String(parsed.resumo || '').length +
         ' chars',
     )
+    if (gravado !== 'pronto') {
+      return e.json(200, {
+        aviso:
+          'A análise foi gerada mas o sistema não conseguiu gravá-la (persistência parcial). Tente de novo.',
+      })
+    }
 
     audit(
       'transcricao_analisada',
