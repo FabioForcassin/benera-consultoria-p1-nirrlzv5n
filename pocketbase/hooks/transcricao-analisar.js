@@ -127,6 +127,24 @@ routerAdd(
     it.set('an_criado_em', new Date().toISOString().replace('T', ' ').slice(0, 19))
     $app.save(it)
 
+    // revalidação server-side: lê do banco o que foi gravado (lição: confiar em $app.save
+    // sem revalidar esconde persistência parcial)
+    let conferindo = null
+    try {
+      conferindo = $app.findRecordById('workspace_items', it.id)
+    } catch (_) {
+      conferindo = null
+    }
+    const gravado = conferindo ? conferindo.getString('an_status') : '(falha ao reler)'
+    audit(
+      'transcricao_analisada',
+      'DEBUG persistência: an_status gravado = ' +
+        gravado +
+        ' — resumo ' +
+        String(parsed.resumo || '').length +
+        ' chars',
+    )
+
     audit(
       'transcricao_analisada',
       'transcrição: ' +
