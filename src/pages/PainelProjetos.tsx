@@ -2223,7 +2223,13 @@ export default function PainelProjetos() {
                           behavior: 'smooth',
                         })
                       } else {
-                        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                        // fallback: o modal do Radix não responde ao scrollIntoView —
+                        // rola a janela pela posição absoluta do elemento
+                        const topo = el.getBoundingClientRect().top + window.scrollY - 12
+                        window.scrollTo({ top: topo, behavior: 'smooth' })
+                        try {
+                          el.scrollIntoView({ block: 'start' })
+                        } catch (_) {}
                       }
                     }}
                   >
