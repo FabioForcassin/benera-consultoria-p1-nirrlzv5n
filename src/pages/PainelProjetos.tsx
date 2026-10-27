@@ -139,12 +139,21 @@ interface WorkspaceItem {
   data_entrega: string
   entregue_por: string
   created: string
+  an_resumo?: string
+  an_decisoes?: string
+  an_compromissos?: string
+  an_riscos?: string
+  an_proximos?: string
+  an_status?: string
+  an_modelo?: string
+  an_criado_em?: string
 }
 interface Workspace {
   notas: WorkspaceItem[]
   comentarios: WorkspaceItem[]
   documentos: WorkspaceItem[]
   entregas: WorkspaceItem[]
+  transcricoes: WorkspaceItem[]
   total: number
 }
 interface Apontamento {
@@ -252,7 +261,9 @@ export default function PainelProjetos() {
 
   // Workspace (T1.10) — seção no cartão 360
   const [ws, setWs] = useState<Workspace | null>(null)
-  const [wsAba, setWsAba] = useState<'notas' | 'comentarios' | 'documentos' | 'entregas'>('notas')
+  const [wsAba, setWsAba] = useState<
+    'notas' | 'comentarios' | 'documentos' | 'entregas' | 'transcricoes'
+  >('notas')
   const [wsTipo, setWsTipo] = useState('nota')
   const [wsTitulo, setWsTitulo] = useState('')
   const [wsConteudo, setWsConteudo] = useState('')
@@ -2608,19 +2619,23 @@ export default function PainelProjetos() {
                     Workspace {ws ? `(${ws.total})` : ''}
                   </div>
                   <div className="flex gap-1.5">
-                    {(['notas', 'comentarios', 'documentos', 'entregas'] as const).map((ab) => (
+                    {(
+                      ['notas', 'comentarios', 'documentos', 'entregas', 'transcricoes'] as const
+                    ).map((ab) => (
                       <button
                         key={ab}
                         onClick={() => {
                           setWsAba(ab)
                           setWsTipo(
-                            ab === 'comentarios'
-                              ? 'comentario'
-                              : ab === 'documentos'
-                                ? 'documento'
-                                : ab === 'entregas'
-                                  ? 'entrega'
-                                  : 'nota',
+                            ab === 'notas'
+                              ? 'nota'
+                              : ab === 'comentarios'
+                                ? 'comentario'
+                                : ab === 'documentos'
+                                  ? 'documento'
+                                  : ab === 'transcricoes'
+                                    ? 'transcricao'
+                                    : 'entrega',
                           )
                         }}
                         className={`px-2.5 py-1 rounded-md text-xs font-medium ${
@@ -2635,9 +2650,11 @@ export default function PainelProjetos() {
                             ? 'Comentários'
                             : ab === 'documentos'
                               ? 'Docs/Links'
-                              : 'Entregas'}
+                              : ab === 'transcricoes'
+                                ? 'Transcrições'
+                                : 'Entregas'}
                       </button>
-                    ))}
+                    ))}{' '}
                     <Button
                       onClick={() => setWsFormAberto(!wsFormAberto)}
                       variant="outline"
@@ -2806,7 +2823,9 @@ export default function PainelProjetos() {
                         ? ws.comentarios
                         : wsAba === 'documentos'
                           ? ws.documentos
-                          : ws.entregas
+                          : wsAba === 'transcricoes'
+                            ? ws.transcricoes
+                            : ws.entregas
                     ).map((item) => (
                       <div
                         key={item.id}

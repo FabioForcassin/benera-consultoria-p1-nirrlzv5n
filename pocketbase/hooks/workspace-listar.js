@@ -56,6 +56,7 @@ routerAdd(
     const comentarios = []
     const documentos = []
     const entregas = []
+    const transcricoes = []
     for (const it of itens) {
       const item = {
         id: it.id,
@@ -71,12 +72,21 @@ routerAdd(
         data_entrega: it.getDateTime('data_entrega').string().slice(0, 10),
         entregue_por: it.getString('entregue_por'),
         created: it.getDateTime('created').string(),
+        an_resumo: it.getString('an_resumo'),
+        an_decisoes: it.getString('an_decisoes'),
+        an_compromissos: it.getString('an_compromissos'),
+        an_riscos: it.getString('an_riscos'),
+        an_proximos: it.getString('an_proximos'),
+        an_status: it.getString('an_status'),
+        an_modelo: it.getString('an_modelo'),
+        an_criado_em: it.getDateTime('an_criado_em').string(),
       }
       const tipo = item.tipo
       if (tipo === 'nota') notas.push(item)
       else if (tipo === 'comentario') comentarios.push(item)
       else if (tipo === 'documento') documentos.push(item)
       else if (tipo === 'entrega') entregas.push(item)
+      else if (tipo === 'transcricao') transcricoes.push(item)
     }
 
     return e.json(200, {
@@ -84,7 +94,13 @@ routerAdd(
       comentarios: comentarios,
       documentos: documentos,
       entregas: entregas,
-      total: notas.length + comentarios.length + documentos.length + entregas.length,
+      transcricoes: transcricoes,
+      total:
+        notas.length +
+        comentarios.length +
+        documentos.length +
+        entregas.length +
+        transcricoes.length,
     })
   },
   $apis.requireAuth(),

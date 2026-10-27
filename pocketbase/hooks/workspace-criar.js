@@ -67,15 +67,23 @@ routerAdd(
     const destinatario = (data.destinatario || '').trim()
     const dataEntrega = (data.data_entrega || '').trim()
 
-    const tiposValidos = ['nota', 'comentario', 'documento', 'entrega']
+    const tiposValidos = ['nota', 'comentario', 'documento', 'entrega', 'transcricao']
     if (tiposValidos.indexOf(tipo) < 0) {
-      throw new BadRequestError('Tipo inválido (use nota, comentario, documento ou entrega).')
+      throw new BadRequestError(
+        'Tipo inválido (use nota, comentario, documento, entrega ou transcricao).',
+      )
     }
 
     const faltantes = []
     if (titulo.length < 3) faltantes.push('titulo')
     if (tipo === 'nota' || tipo === 'comentario') {
       if (conteudo.length < 3) faltantes.push('conteudo')
+    }
+    // T3.1: transcrição exige o texto (conteudo) — é a matéria-prima da análise
+    if (tipo === 'transcricao') {
+      if (conteudo.length < 50) {
+        faltantes.push('conteudo')
+      }
     }
     if (tipo === 'entrega') {
       if (!destinatario) faltantes.push('destinatario')
@@ -108,13 +116,23 @@ routerAdd(
     rec.set('origem_pendente', origemPendente)
     rec.set('active', true)
     rec.set('created_by', auth.id)
+    if (tipo === 'transcricao') {
+      rec.set('an_status', 'pendente')
+    }
     $app.save(rec)
 
     const auditCol = $app.findCollectionByNameOrId('audit_log')
     const log = new Record(auditCol)
     log.set('actor_id', auth.id)
     log.set('actor_email', auth.getString('email'))
-    log.set('action', tipo === 'entrega' ? 'entrega_registered' : 'workspace_created')
+    log.set(
+      'action',
+      tipo === 'entrega'
+        ? 'entrega_registered'
+        : tipo === 'transcricao'
+          ? 'transcricao_criada'
+          : 'workspace_created',
+    )
     log.set('project_key', projectKey)
     log.set(
       'detail',
@@ -122,6 +140,9 @@ routerAdd(
         ': ' +
         titulo +
         (tipo === 'entrega' ? ' → ' + destinatario : '') +
+        (tipo === 'transcricao'
+          ? ' (' + Math.round(conteudo.length / 100) + ' blocos de texto — análise pendente)'
+          : '') +
         (origemPendente ? ' (origem pendente — registro manual, sem integração automática)' : ''),
     )
     $app.save(log)
