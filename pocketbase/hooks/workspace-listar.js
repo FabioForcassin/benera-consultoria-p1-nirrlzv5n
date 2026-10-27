@@ -1,8 +1,9 @@
-// T1.10/T1.11/T3.1 — Listar itens de workspace do projeto com escopo por vínculo:
+// T1.10/T1.11/T3.1/T3.2 — Listar itens de workspace do projeto com escopo por vínculo:
 // admin/líder veem tudo; consultor/revisor só projetos com vínculo (senão 403 auditado).
-// Retorna itens ATIVOS agrupados por tipo (nota/comentario/documento/entrega/transcricao),
-// com origem_pendente (CA-1-030) e campos da análise IA (T3.1/T3.2).
-// [reescrito v0.0.84 p/ forçar re-registro do hook — lição T1.8/T2.4]
+// Itens ATIVOS agrupados por tipo (nota/comentario/documento/entrega/transcricao);
+// transcrições vêm com a análise IA mesclada (coleção transcricao_analises, T3.2 —
+// lição Fábrica: campo adicionado em coleção existente não persiste; coleção nova sim).
+// [reescrito v0.0.88]
 routerAdd(
   'GET',
   '/backend/v1/projects/{key}/workspace',
@@ -73,14 +74,33 @@ routerAdd(
         data_entrega: it.getDateTime('data_entrega').string().slice(0, 10),
         entregue_por: it.getString('entregue_por'),
         created: it.getDateTime('created').string(),
-        an_resumo: it.getString('an_resumo'),
-        an_decisoes: it.getString('an_decisoes'),
-        an_compromissos: it.getString('an_compromissos'),
-        an_riscos: it.getString('an_riscos'),
-        an_proximos: it.getString('an_proximos'),
-        an_status: it.getString('an_status'),
-        an_modelo: it.getString('an_modelo'),
-        an_criado_em: it.getDateTime('an_criado_em').string(),
+        an_resumo: '',
+        an_decisoes: '',
+        an_compromissos: '',
+        an_riscos: '',
+        an_proximos: '',
+        an_status: '',
+        an_modelo: '',
+        an_criado_em: '',
+      }
+      // T3.2: mescla a análise IA da coleção transcricao_analises (1:1 por item)
+      if (item.tipo === 'transcricao') {
+        let an = null
+        try {
+          an = $app.findFirstRecordByData('transcricao_analises', 'item_id', it.id)
+        } catch (_) {
+          an = null
+        }
+        if (an) {
+          item.an_resumo = an.getString('resumo')
+          item.an_decisoes = an.getString('decisoes')
+          item.an_compromissos = an.getString('compromissos')
+          item.an_riscos = an.getString('riscos')
+          item.an_proximos = an.getString('proximos')
+          item.an_status = an.getString('status')
+          item.an_modelo = an.getString('modelo')
+          item.an_criado_em = an.getString('criado_em')
+        }
       }
       const tipo = item.tipo
       if (tipo === 'nota') notas.push(item)
@@ -91,7 +111,6 @@ routerAdd(
     }
 
     return e.json(200, {
-      versao: 'v84b',
       notas: notas,
       comentarios: comentarios,
       documentos: documentos,

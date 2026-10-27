@@ -1,10 +1,9 @@
 // T3.2 — Análise IA server-side de transcrições (Fase 3, 100% nativo Skip).
-// POST /backend/v1/workspace/{id}/analisar  — escopo por vínculo ao projeto do item.
-// Chama $ai.chat (gateway da plataforma, alias 'fast') e grava a análise estruturada
-// nos campos an_* do item (an_status: pendente → pronto/erro; an_modelo registra o alias).
-// Saída esperada do modelo: JSON com resumo, decisoes[], compromissos[], riscos[], proximos[].
-// Auditado: transcricao_analisada (com modelo e tamanho da análise) / transcricao_erro.
-// Re-análise permitida (sobrescreve a anterior, auditada).
+// POST /backend/v1/workspace/{id}/analisar — escopo por vínculo ao projeto do item.
+// Chama $ai.chat (gateway da plataforma, alias 'fast') e grava a análise na coleção
+// transcricao_analises (upsert por item_id — lição: coleção nova persiste; campo
+// adicionado em coleção existente não). Re-análise permitida (sobrescreve, auditada).
+// Auditado: transcricao_analisada (modelo + tamanho) / transcricao_erro.
 routerAdd(
   'POST',
   '/backend/v1/workspace/{id}/analisar',
@@ -59,14 +58,6 @@ routerAdd(
       throw new BadRequestError('Transcrição sem texto suficiente para analisar.')
     }
 
-    // marca processando antes da chamada (evita análise dupla em clique duplo)
-    const statusAnterior = it.getString('an_status')
-    if (statusAnterior === 'processando') {
-      return e.json(200, { aviso: 'Análise já em andamento.' })
-    }
-    it.set('an_status', 'processando')
-    $app.save(it)
-
     const SYSTEM =
       'Você é analista sênior de uma consultoria de remuneração e desenho organizacional. ' +
       'Analise a transcrição de reunião de projeto e responda APENAS com JSON válido, sem texto fora do JSON, ' +
@@ -89,8 +80,6 @@ routerAdd(
       })
       resposta = (reply.choices[0].message.content || '').trim()
     } catch (errAi) {
-      it.set('an_status', 'erro')
-      $app.save(it)
       audit('transcricao_erro', 'análise falhou: ' + String(errAi).slice(0, 120))
       return e.json(200, {
         aviso: 'Análise indisponível agora (' + String(errAi).slice(0, 80) + ').',
@@ -107,47 +96,51 @@ routerAdd(
       parsed = null
     }
     if (!parsed || typeof parsed !== 'object') {
-      it.set('an_status', 'erro')
-      it.set('an_resumo', resposta.slice(0, 4000))
-      $app.save(it)
-      audit('transcricao_erro', 'resposta da IA não veio em JSON válido (guardada como resumo)')
-      return e.json(200, {
-        aviso: 'A análise veio em formato inesperado — texto guardado como resumo. Tente de novo.',
-      })
+      audit('transcricao_erro', 'resposta da IA não veio em JSON válido')
+      return e.json(200, { aviso: 'A análise veio em formato inesperado. Tente de novo.' })
     }
 
     const j = (v) => (Array.isArray(v) ? JSON.stringify(v) : String(v || ''))
-    it.set('an_resumo', String(parsed.resumo || '').slice(0, 4000))
-    it.set('an_decisoes', j(parsed.decisoes).slice(0, 8000))
-    it.set('an_compromissos', j(parsed.compromissos).slice(0, 8000))
-    it.set('an_riscos', j(parsed.riscos).slice(0, 4000))
-    it.set('an_proximos', j(parsed.proximos).slice(0, 4000))
-    it.set('an_status', 'pronto')
-    it.set('an_modelo', 'fast')
-    it.set('an_criado_em', new Date().toISOString().replace('T', ' ').slice(0, 19))
-    $app.save(it)
+    const resumo = String(parsed.resumo || '').slice(0, 4000)
+    const decisoes = j(parsed.decisoes).slice(0, 8000)
+    const compromissos = j(parsed.compromissos).slice(0, 8000)
+    const riscos = j(parsed.riscos).slice(0, 4000)
+    const proximos = j(parsed.proximos).slice(0, 4000)
+    const criadoEm = new Date().toISOString().replace('T', ' ').slice(0, 19)
 
-    // revalidação server-side: lê do banco o que foi gravado (lição: confiar em $app.save
-    // sem revalidar esconde persistência parcial)
+    // upsert na coleção nova (1 registro por item)
+    let rec = null
+    try {
+      rec = $app.findFirstRecordByData('transcricao_analises', 'item_id', it.id)
+    } catch (_) {
+      rec = null
+    }
+    const colAn = $app.findCollectionByNameOrId('transcricao_analises')
+    if (!rec) rec = new Record(colAn)
+    rec.set('item_id', it.id)
+    rec.set('project_key', projectKey)
+    rec.set('resumo', resumo)
+    rec.set('decisoes', decisoes)
+    rec.set('compromissos', compromissos)
+    rec.set('riscos', riscos)
+    rec.set('proximos', proximos)
+    rec.set('status', 'pronto')
+    rec.set('modelo', 'fast')
+    rec.set('criado_em', criadoEm)
+    $app.save(rec)
+
+    // revalidação: relê do banco o que foi gravado
     let conferindo = null
     try {
-      conferindo = $app.findRecordById('workspace_items', it.id)
+      conferindo = $app.findFirstRecordByData('transcricao_analises', 'item_id', it.id)
     } catch (_) {
       conferindo = null
     }
-    const gravado = conferindo ? conferindo.getString('an_status') : '(falha ao reler)'
-    audit(
-      'transcricao_analisada',
-      'DEBUG persistência: an_status gravado = ' +
-        gravado +
-        ' — resumo ' +
-        String(parsed.resumo || '').length +
-        ' chars',
-    )
+    const gravado = conferindo ? conferindo.getString('status') : ''
     if (gravado !== 'pronto') {
+      audit('transcricao_erro', 'persistência parcial da análise (status gravado vazio)')
       return e.json(200, {
-        aviso:
-          'A análise foi gerada mas o sistema não conseguiu gravá-la (persistência parcial). Tente de novo.',
+        aviso: 'A análise foi gerada mas não conseguiu ser gravada. Tente de novo.',
       })
     }
 
@@ -156,20 +149,19 @@ routerAdd(
       'transcrição: ' +
         it.getString('titulo') +
         ' — modelo fast — resumo ' +
-        String(parsed.resumo || '').length +
-        ' chars' +
-        (statusAnterior === 'pronto' ? ' (re-análise)' : ''),
+        resumo.length +
+        ' chars',
     )
 
     return e.json(200, {
       ok: true,
       id: it.id,
       an_status: 'pronto',
-      resumo: it.getString('an_resumo'),
-      decisoes: it.getString('an_decisoes'),
-      compromissos: it.getString('an_compromissos'),
-      riscos: it.getString('an_riscos'),
-      proximos: it.getString('an_proximos'),
+      resumo: resumo,
+      decisoes: decisoes,
+      compromissos: compromissos,
+      riscos: riscos,
+      proximos: proximos,
     })
   },
   $apis.requireAuth(),
